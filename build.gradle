@@ -170,6 +170,7 @@ dependencies {
     implementation 'commons-net:commons-net:3.6'
     implementation 'commons-validator:commons-validator:1.6'
     implementation 'de.odysseus.juel:juel-impl:2.2.7'
+    implementation 'org.glassfish.jersey.containers:jersey-container-servlet:2.32'
     implementation 'net.fortuna.ical4j:ical4j:1.0-rc3-atlassian-11'
     implementation 'org.apache.ant:ant-junit:1.10.8'
     implementation 'org.apache.commons:commons-collections4:4.4'
