@@ -170,8 +170,6 @@ dependencies {
     implementation 'commons-net:commons-net:3.6'
     implementation 'commons-validator:commons-validator:1.6'
     implementation 'de.odysseus.juel:juel-impl:2.2.7'
-    implementation 'org.glassfish.jersey.containers:jersey-container-servlet:2.32'
-    implementation 'org.glassfish.jersey.inject:jersey-hk2:2.32'
     implementation 'net.fortuna.ical4j:ical4j:1.0-rc3-atlassian-11'
     implementation 'org.apache.ant:ant-junit:1.10.8'
     implementation 'org.apache.commons:commons-collections4:4.4'
@@ -180,6 +178,7 @@ dependencies {
     implementation 'org.apache.geronimo.components:geronimo-transaction:3.1.4'
     implementation 'org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1.1'
     implementation 'org.apache.httpcomponents:httpclient-cache:4.5.12'
+    implementation 'org.apache.juneau:juneau-all:8.2.0'
     implementation 'org.apache.logging.log4j:log4j-api:2.13.3' // the API of log4j 2
     implementation 'org.apache.logging.log4j:log4j-core:2.13.3' // Somehow needed by Buildbot to compile OFBizDynamicThresholdFilter.java
     implementation 'org.apache.poi:poi:4.1.2'
