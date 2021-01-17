@@ -1,10 +1,21 @@
 package org.apache.ofbiz.webapp.rest;
 
 import org.apache.juneau.http.exception.HttpException;
+import org.apache.juneau.http.exception.NotFound;
 import org.apache.juneau.rest.RestCall;
 import org.apache.juneau.rest.RestContextBuilder;
+import org.apache.juneau.rest.RestMethodContext;
+import org.apache.ofbiz.base.util.Debug;
+
+import javax.servlet.ServletException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class RestContext extends org.apache.juneau.rest.RestContext {
+
+    private static final String MODULE = RestContext.class.getName();
 
     private org.apache.juneau.rest.RestContext parent;
     private RestServlet restServlet;
@@ -13,6 +24,30 @@ public class RestContext extends org.apache.juneau.rest.RestContext {
         super(builder);
         this.parent = parent;
         this.restServlet = restServlet;
+    }
+
+    /**
+     * see org.apache.juneau.rest.RestContext#findMethod(org.apache.juneau.rest.RestCall)
+     */
+    protected RestMethodContext findMethod(RestCall call) {
+        // TODO read from rest.xml
+        List<RestMethodContext> methods = new ArrayList<>();
+
+        return null;
+    }
+
+    /**
+     * Similar to org.apache.juneau.rest.RestMethodContext#invoke(org.apache.juneau.rest.RestCall)
+     */
+    protected void invoke(RestCall call, RestMethodContext restMethodContext) {
+        Debug.logInfo("Invoking rest call: " + call.getPathInfo(), MODULE);
+
+        Map<String, Object> output = new HashMap<>();
+
+        // TODO set fields returned from calling an event
+        output.put("text", "Hello world!");
+
+        call.getRestResponse().setOutput(output);
     }
 
     @Override
@@ -48,6 +83,41 @@ public class RestContext extends org.apache.juneau.rest.RestContext {
             this.restServlet.onDestroy(this);
         } catch (Exception e) {
             throw new HttpException(e.getMessage());
+        }
+    }
+
+    @Override
+    public org.apache.juneau.rest.RestContext postInit() throws ServletException {
+        try {
+            this.restServlet.onPostInit(this);
+            return this;
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
+    }
+
+    @Override
+    public org.apache.juneau.rest.RestContext postInitChildFirst() throws ServletException {
+        try {
+            this.restServlet.onPostInitChildFirst(this);
+            return this;
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
+    }
+
+    /**
+     * Called by {@link org.apache.juneau.rest.RestContext#execute(javax.servlet.http.HttpServletRequest, javax.servlet.http.HttpServletResponse)
+     */
+    @Override
+    public void handleNotFound(RestCall call) throws Exception {
+        try {
+            RestMethodContext restMethodContext = this.findMethod(call);
+            this.invoke(call, restMethodContext);
+        } catch (NotFound e) {
+            if (call.getStatus() == 0)
+                call.status(404);
+            super.handleNotFound(call);
         }
     }
 }
