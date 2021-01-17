@@ -2,9 +2,9 @@ package org.apache.ofbiz.webapp.rest;
 
 import org.apache.juneau.http.exception.HttpException;
 import org.apache.juneau.http.exception.NotFound;
-import org.apache.juneau.rest.RestCall;
-import org.apache.juneau.rest.RestContextBuilder;
-import org.apache.juneau.rest.RestMethodContext;
+import org.apache.juneau.rest.*;
+import org.apache.juneau.rest.util.UrlPathPattern;
+import org.apache.juneau.rest.util.UrlPathPatternMatch;
 import org.apache.ofbiz.base.util.Debug;
 
 import javax.servlet.ServletException;
@@ -33,6 +33,12 @@ public class RestContext extends org.apache.juneau.rest.RestContext {
         // TODO read from rest.xml
         List<RestMethodContext> methods = new ArrayList<>();
 
+        String pattern = "/test/{param1}/{param2}";
+        UrlPathPattern urlPathPattern = new UrlPathPattern(pattern);
+        UrlPathPatternMatch urlPathPatternMatch = urlPathPattern.match(call.getUrlPathInfo());
+        if (urlPathPatternMatch != null) {
+            call.urlPathPatternMatch(urlPathPatternMatch);
+        }
         return null;
     }
 
@@ -41,6 +47,17 @@ public class RestContext extends org.apache.juneau.rest.RestContext {
      */
     protected void invoke(RestCall call, RestMethodContext restMethodContext) {
         Debug.logInfo("Invoking rest call: " + call.getPathInfo(), MODULE);
+
+        UrlPathPatternMatch pm = call.getUrlPathPatternMatch();
+        if (pm == null)
+            throw new NotFound();
+
+        RestRequest req = call.getRestRequest();
+        RestResponse res = call.getRestResponse();
+
+        RequestPath rp = req.getPathMatch();
+        for (Map.Entry<String,String> e : pm.getVars().entrySet())
+            rp.put(e.getKey(), e.getValue());
 
         Map<String, Object> output = new HashMap<>();
 
