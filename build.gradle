@@ -206,10 +206,6 @@ allprojects {
             url 'https://clojars.org/repo'
         }
         maven {
-            // org.cyberneko.html.parsers (used by UELFunctions, was in esapi before 2.3)
-            url "https://repository.ow2.org/nexus/content/repositories/public/"
-        }
-        maven {
             url "https://artifacts.alfresco.com/nexus/content/repositories/public/"
         }
         /* maven {
@@ -352,8 +348,8 @@ gitHooks {
 codenarc {
     setConfigFile(new File('config/codenarc/codenarc.groovy'))
     setMaxPriority1Violations(0)
-    setMaxPriority2Violations(403)
-    setMaxPriority3Violations(3920)
+    setMaxPriority2Violations(0)
+    setMaxPriority3Violations(0)
 }
 
 // Eclipse plugin settings
@@ -561,14 +557,20 @@ tasks.withType(AsciidoctorTask) { task ->
         jvm {
             jvmArgs("--add-opens","java.base/sun.nio.ch=ALL-UNNAMED","--add-opens","java.base/java.io=ALL-UNNAMED")
         }
-    outputOptions {
-         // I hate we have to do this - but JRuby (asciidoctorj-pdf) and Windows don't mix well
-        if (System.properties['os.name'].toLowerCase().contains('windows')) {
-            backends = ['html5']
-        } else {
-            backends = ['html5', 'pdf']
-        }
-    }
+//    outputOptions {
+//         // I hate we have to do this - but JRuby (asciidoctorj-pdf) and Windows don't mix well
+//        if (System.properties['os.name'].toLowerCase().contains('windows')) {
+//            backends = ['html5']
+//        } else {
+//            backends = ['html5', 'pdf']
+//        }
+         //It seems we have no choice when using Builbot we now get this issue:
+//        Caused by: org.jruby.exceptions.LoadError: (LoadError) no such file to load -- asciidoctor-pdf
+//        at org.jruby.RubyKernel.require(org/jruby/RubyKernel.java:1017)
+//        at RUBY.require(uri:classloader:/META-INF/jruby.home/lib/ruby/stdlib/rubygems/core_ext/kernel_require.rb:85)
+//        at RUBY.<main>(<script>:1)
+//        backends = ['html5'] // this is the default, so for now outputOptions is not needed
+//    }
     attributes \
         'doctype': 'book',
         'revnumber': getCurrentGitBranch(),
@@ -663,7 +665,12 @@ task generateAllPluginsDocumentation(group: docsGroup,
         description: 'Generate all plugins documentation.') {
 
     dependsOn deleteAllPluginsDocumentation
-    file("${pluginsDir}").eachDir { plugin ->
+    File pluginsDirectory = file(pluginsDir)
+    if (!pluginsDirectory.exists()) {
+        println("Plugins directory not found.")
+        return
+    }
+    pluginsDirectory.eachDir { plugin ->
         activeComponents().each { component ->
             if (component.name == plugin.name) {
                 if (subprojectExists(":plugins:${plugin.name}")) {

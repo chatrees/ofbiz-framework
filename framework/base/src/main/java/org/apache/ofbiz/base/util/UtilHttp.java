@@ -65,16 +65,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 
 import org.apache.commons.fileupload2.core.DiskFileItem;
 import org.apache.commons.fileupload2.core.DiskFileItemFactory;
 import org.apache.commons.fileupload2.core.FileItem;
 import org.apache.commons.fileupload2.core.FileUploadException;
 import org.apache.commons.fileupload2.jakarta.JakartaServletFileUpload;
-
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -93,6 +89,10 @@ import org.apache.ofbiz.widget.renderer.VisualTheme;
 
 import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * HttpUtil - Misc HTTP Utility Functions
@@ -230,7 +230,6 @@ public final class UtilHttp {
         if (isMultiPart) {
             // create the progress listener and add it to the session
             String encoding = request.getCharacterEncoding();
-            Charset charset = Charset.forName(encoding);
             JakartaServletFileUpload<DiskFileItem, DiskFileItemFactory> upload = UtilHttp.getServletFileUpload(request);
             FileUploadProgressListener listener = new FileUploadProgressListener();
             upload.setProgressListener(listener);

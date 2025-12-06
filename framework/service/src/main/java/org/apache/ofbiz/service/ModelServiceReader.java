@@ -475,6 +475,7 @@ public final class ModelServiceReader implements Serializable {
         service.addParam(createInternalParam(ModelService.RESPONSE_MESSAGE, "String", ModelService.OUT_PARAM));
         service.addParam(createInternalParam(ModelService.ERROR_MESSAGE, "String", ModelService.OUT_PARAM));
         service.addParam(createInternalParam(ModelService.ERROR_MESSAGE_LIST, "java.util.List", ModelService.OUT_PARAM));
+        service.addParam(createInternalParam(ModelService.ERROR_MESSAGE_MAP, "java.util.Map", ModelService.OUT_PARAM));
         service.addParam(createInternalParam(ModelService.SUCCESS_MESSAGE, "String", ModelService.OUT_PARAM));
         service.addParam(createInternalParam(ModelService.SUCCESS_MESSAGE_LIST, "java.util.List", ModelService.OUT_PARAM));
         service.addParam(createInternalParam("userLogin", "org.apache.ofbiz.entity.GenericValue", ModelService.IN_OUT_PARAM));
