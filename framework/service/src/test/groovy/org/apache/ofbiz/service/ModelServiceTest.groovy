@@ -46,7 +46,6 @@ class ModelServiceTest {
     @Before
     void initialize() {
         System.setProperty('ofbiz.home', System.getProperty('user.dir'))
-        System.setProperty('derby.system.home', './runtime/data/derby')
         dispatcher = Mockito.mock(LocalDispatcher)
         Mockito.when(dispatcher.getDelegator()).thenReturn(DelegatorFactory.getDelegator('default'))
     }
@@ -110,15 +109,17 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithNullRequiredParam() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="message" type="String" mode="IN"/>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [message: null],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="message" type="String" mode="IN"/>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [message: null],
+                            'IN', Locale.default)
+        }
     }
 
     @Test
@@ -136,15 +137,17 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithOneSingleRequiredParamMissing() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="message" type="String" mode="IN"/>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [missing: 'ok'],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="message" type="String" mode="IN"/>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [missing: 'ok'],
+                            'IN', Locale.default)
+        }
     }
 
     @Test
@@ -164,18 +167,20 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithOneComplexParameterAllRequiredEmbeddedMissing() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="header" type="java.util.Map" mode="IN" optional="false">
-                   <attribute name="headerParam" type="String" mode="IN" optional="false"/>
-                   <attribute name="otherParam" type="String" mode="IN" optional="false"/>
-               </attribute>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [header: [headerParam: 'foo']],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="header" type="java.util.Map" mode="IN" optional="false">
+                       <attribute name="headerParam" type="String" mode="IN" optional="false"/>
+                       <attribute name="otherParam" type="String" mode="IN" optional="false"/>
+                   </attribute>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [header: [headerParam: 'foo']],
+                            'IN', Locale.default)
+        }
     }
 
     @Test
@@ -214,32 +219,36 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithOneComplexParameterAndUnexpectedEmbeededParam() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="header" type="java.util.Map" mode="IN" optional="false">
-                   <attribute name="headerParam" type="String" mode="IN" optional="false"/>
-                   <attribute name="otherParam" type="String" mode="IN" optional="true"/>
-               </attribute>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [header: [headerParam: 'foo', otherParam: 'Good', unexpectedParam: 'Bad']],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="header" type="java.util.Map" mode="IN" optional="false">
+                       <attribute name="headerParam" type="String" mode="IN" optional="false"/>
+                       <attribute name="otherParam" type="String" mode="IN" optional="true"/>
+                   </attribute>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [header: [headerParam: 'foo', otherParam: 'Good', unexpectedParam: 'Bad']],
+                            'IN', Locale.default)
+        }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithOneComplexParameterAndBadListValue() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="header" type="java.util.Map" mode="IN" optional="false">
-                   <attribute name="headerParam" type="String" mode="IN" optional="false"/>
-                   <attribute name="otherParam" type="String" mode="IN" optional="true"/>
-               </attribute>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [header: ['headerParam', 'otherParam']],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="header" type="java.util.Map" mode="IN" optional="false">
+                       <attribute name="headerParam" type="String" mode="IN" optional="false"/>
+                       <attribute name="otherParam" type="String" mode="IN" optional="true"/>
+                   </attribute>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [header: ['headerParam', 'otherParam']],
+                            'IN', Locale.default)
+        }
     }
 
     @Test
@@ -263,21 +272,23 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithTwoComplexLevelParameterUnwantedParameter() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="header" type="java.util.Map" mode="IN" optional="false">
-                   <attribute name="headerParam" type="java.util.Map" mode="IN" optional="false">
-                        <attribute name="subHeaderParam" type="String" mode="IN" optional="false"/>
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="header" type="java.util.Map" mode="IN" optional="false">
+                       <attribute name="headerParam" type="java.util.Map" mode="IN" optional="false">
+                            <attribute name="subHeaderParam" type="String" mode="IN" optional="false"/>
+                       </attribute>
+                       <attribute name="otherParam" type="String" mode="IN" optional="true"/>
                    </attribute>
-                   <attribute name="otherParam" type="String" mode="IN" optional="true"/>
-               </attribute>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [header: [headerParam: [subHeaderParam: 'true', otherParam: 'false'],
-                                                otherParam: 'true']],
-                        'IN', Locale.default)
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [header: [headerParam: [subHeaderParam: 'true', otherParam: 'false'],
+                                                    otherParam: 'true']],
+                            'IN', Locale.default)
+        }
     }
 
     @Test
@@ -315,20 +326,22 @@ class ModelServiceTest {
         }
     }
 
-    @Test(expected = ServiceValidationException)
+    @Test
     void callValidateServiceWithOneComplexParameterAsListAndUnwantedParameter() {
-        String serviceXml = '''<service name="testParam" engine="java"
-               location="org.apache.ofbiz.common.CommonServices" invoke="ping">
-               <attribute name="header" type="java.util.List" mode="IN" optional="false">
-                   <attribute name="headerParam" type="String" mode="IN" optional="false"/>
-                   <attribute name="otherParam" type="String" mode="IN" optional="true"/>
-               </attribute>
-           </service>'''
-        createModelService(serviceXml)
-                .validate(dispatcher, [header: [[headerParam: 'line1', otherParam: 'Good'],
-                                                [headerParam: 'line2', otherParam: 'Good',
-                                                 unwanted: 'Bad']]],
-                        'IN', Locale.default)
+        org.junit.jupiter.api.Assertions.assertThrows(ServiceValidationException) {
+            String serviceXml = '''<service name="testParam" engine="java"
+                   location="org.apache.ofbiz.common.CommonServices" invoke="ping">
+                   <attribute name="header" type="java.util.List" mode="IN" optional="false">
+                       <attribute name="headerParam" type="String" mode="IN" optional="false"/>
+                       <attribute name="otherParam" type="String" mode="IN" optional="true"/>
+                   </attribute>
+               </service>'''
+            createModelService(serviceXml)
+                    .validate(dispatcher, [header: [[headerParam: 'line1', otherParam: 'Good'],
+                                                    [headerParam: 'line2', otherParam: 'Good',
+                                                     unwanted: 'Bad']]],
+                            'IN', Locale.default)
+        }
     }
 
     @Test

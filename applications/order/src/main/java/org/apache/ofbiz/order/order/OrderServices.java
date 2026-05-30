@@ -210,7 +210,7 @@ public class OrderServices {
         // final check - will pass if userLogin's partyId = partyId for order or if userLogin has ORDERMGR_CREATE permission
         // jacopoc: what is the meaning of this code block? FIXME
         if (!hasPermission) {
-            partyId = ServiceUtil.getPartyIdCheckSecurity(userLogin, security, context, resultSecurity, "ORDERMGR", "_CREATE");
+            partyId = PartyWorker.getPartyIdCheckSecurity(userLogin, security, context, resultSecurity, "ORDERMGR", "_CREATE");
             if (!resultSecurity.isEmpty()) {
                 return resultSecurity;
             }
@@ -5489,6 +5489,9 @@ public class OrderServices {
                 for (GenericValue shipmentReceipt : shipmentReceipts) {
                     if (!UtilValidate.isEmpty(shipmentReceipt.get("quantityAccepted"))) {
                         receivedQuantity = receivedQuantity.add(shipmentReceipt.getBigDecimal("quantityAccepted"));
+                    }
+                    if (!UtilValidate.isEmpty(shipmentReceipt.get("quantityRejected"))) {
+                        receivedQuantity = receivedQuantity.add(shipmentReceipt.getBigDecimal("quantityRejected"));
                     }
                 }
 

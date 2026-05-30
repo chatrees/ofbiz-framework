@@ -124,7 +124,7 @@ under the License.
             <actions>
                 <set field="layoutSettings.javaScripts[+0]" value="${groovy: org.apache.ofbiz.common.JsLanguageFilesMapping.Validation.getFilePath(initialLocaleComplete)}" global="true" />
                 <!-- Jgrowl -->
-                <set field="layoutSettings.styleSheets[+0]" value="/common/js/jquery/plugins/jquery-jgrowl/jquery.jgrowl-1.4.6.min.css" global="true" />
+                <set field="layoutSettings.styleSheets[+0]" value="/common/js/node_modules/jgrowl/jquery.jgrowl.min.css" global="true" />
                 <!-- Trumbowyg -->
                 <set field="layoutSettings.styleSheets[+0]" value="/common/js/node_modules/trumbowyg/dist/ui/trumbowyg.min.css" global="true" />
                 <!-- Set default user locale from browser -->
@@ -653,6 +653,29 @@ under the License.
                                 </platform-specific>
                             </widgets>
                         </section>
+                    </decorator-section>
+                </decorator-screen>
+            </widgets>
+        </section>
+    </screen>
+    <screen name="userprofile">
+        <section>
+            <actions>
+                <property-map resource="CommonUiLabels" map-name="uiLabelMap" global="true"/>
+                <set field="titleProperty" value="CommonProfile"/>
+            </actions>
+            <widgets>
+                <decorator-screen name="main-decorator" location="${parameters.mainDecoratorLocation}">
+                    <decorator-section name="body">
+                        <section>
+                            <actions>
+                                <set field="userProfileTemplateLocation" from-field="layoutSettings.VT_USER_PROFILE_TMPLT_LOC" default-value="component://common-theme/template/UserProfile.ftl"/>
+                            </actions>
+                            <widgets />
+                        </section>
+                        <platform-specific>
+                            <html><html-template location="${userProfileTemplateLocation}"/></html>
+                        </platform-specific>
                     </decorator-section>
                 </decorator-screen>
             </widgets>
