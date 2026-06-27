@@ -152,8 +152,8 @@ javadoc {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 // Java compile options, syntax gradlew -PXlint:none build
@@ -183,6 +183,7 @@ defaultTasks 'jar', 'test'
 allprojects {
     repositories {
         mavenCentral()
+        mavenLocal()
         // the switch from jCenter to mavenCentral needs some additional repositories to be configured here
         // this should be checked frequently to remove obsolete configurations if the artifacts are available
         // on mavenCentral directly
@@ -215,9 +216,14 @@ allprojects {
             url = "https://repository.apache.org/content/repositories/snapshots/"
         } */
         maven {
+            url "https://igniterealtime.org/archiva/repository/maven/"
+        }
+        /*
+        maven {
             url "http://192.168.1.176:8181/repository/maven-releases/"
             allowInsecureProtocol true
         }
+        */
     }
 }
 
@@ -229,6 +235,8 @@ subprojects {
         pluginLibsRuntime
         //compile-only libraries
         pluginLibsCompileOnly
+        //annotation processor libraries
+        pluginAnnotationProcessor
     }
 }
 
@@ -259,6 +267,7 @@ dependencies {
         implementation project(path: subProject.path, configuration: 'pluginLibsCompile')
         runtimeOnly project(path: subProject.path, configuration: 'pluginLibsRuntime')
         compileOnly project(path: subProject.path, configuration: 'pluginLibsCompileOnly')
+        annotationProcessor project(path: subProject.path, configuration: 'pluginAnnotationProcessor')
     }
 
     junitReport 'junit:junit:4.13.2'
