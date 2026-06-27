@@ -272,15 +272,6 @@ dependencies {
 }
 
 def excludedJavaSources = [
-    'org/apache/ofbiz/accounting/thirdparty/cybersource/IcsPaymentServices.java',
-    'org/apache/ofbiz/accounting/thirdparty/orbital/OrbitalPaymentServices.java',
-    'org/apache/ofbiz/accounting/thirdparty/paypal/PayPalServices.java',
-    'org/apache/ofbiz/accounting/thirdparty/securepay/SecurePayPaymentServices.java',
-    'org/apache/ofbiz/accounting/thirdparty/securepay/SecurePayServiceTest.java',
-    'org/apache/ofbiz/accounting/thirdparty/verisign/PayflowPro.java',
-    'org/apache/ofbiz/order/thirdparty/taxware/TaxwareException.java',
-    'org/apache/ofbiz/order/thirdparty/taxware/TaxwareServices.java',
-    'org/apache/ofbiz/order/thirdparty/taxware/TaxwareUTL.java'
 ]
 
 sourceSets {
@@ -798,7 +789,7 @@ task createPlugin(group: ofbizPlugin, description: 'create a new plugin componen
         def pluginDir = "${pluginsDir}/${pluginId}"
 
         ['config', 'dtd', 'entitydef', 'lib', 'patches/test', 'patches/qa',
-                'patches/production', 'src/main/groovy', 'minilang', 'servicedef', 'src/main/java', 'src/test/java', 'testdef',
+                'patches/production', 'src/main/groovy', 'minilang', 'servicedef', 'src/main/java', 'src/test/java', 'src/test/groovy', 'testdef',
                 'widget', "webapp/${webappName}/error", "webapp/${webappName}/WEB-INF"].each {
             mkdir pluginDir + '/' + it
         }
@@ -1047,12 +1038,14 @@ tasks.addRule('Pattern: ofbizBackground <Commands>: Execute OFBiz startup comman
 def createOfbizCommandTask(taskName, arguments) {
     task(type: JavaExec, dependsOn: classes, taskName) {
         jvmArgs(application.applicationDefaultJvmArgs)
-        classpath = sourceSets.main.runtimeClasspath
+        if (taskName ==~ /^ofbiz.*(--test|-t).*/) {
+            classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+            finalizedBy(createTestReports)
+        } else {
+            classpath = sourceSets.main.runtimeClasspath
+        }
         mainClass = application.mainClass
         args arguments
-        if (taskName ==~ /^ofbiz.*(--test|-t).*/) {
-            finalizedBy(createTestReports)
-        }
     }
 }
 
