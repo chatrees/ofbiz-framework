@@ -30,6 +30,27 @@ The following file contains information about the data model changes in the Apac
 
 === Entity Changes
 *Added new entities*
+. MaritalStatus
+. MaritalStatusType
+
+=== Field Changes
+[cols="<,^,^,^,>",options="header",]
+|=======================================================
+|Entity                 |Field   |Action |IsPK |Revision
+| Person | maritalStatusTypeId | Added | No | 109c496e
+
+|=======================================================
+
+=== Migration Scripts
+1.  Migration service *migratePersonMaritalStatusType* is implemented to migrate the
+    *oldMaritalStatusEnumId* field to *maritalStatusTypeId* on entity *Person*. +
+    (More detail at https://issues.apache.org/jira/browse/OFBIZ-13329[OFBIZ-13329])
+
+
+== Changes with OFBiz 24
+
+=== Entity Changes
+*Added new entities*
 
 . ProdPromoCodeContactMech
 . OrderDenylist
@@ -416,7 +437,6 @@ No changes
 |UserLogin |externalAuthId |Added |No |NA
 |UserLogin |userLdapDn |Added |No |NA
 |UserLogin |disabledBy |Added |No |NA
-|ValueLinkKey |createdByUserLogin |Added |No |NA
 |WebSite |visualThemeSetId |Added |No |NA
 |WebSite |hostedPathAlias |Added |No |NA
 |WebSite |isDefault |Added |No |NA
@@ -436,4 +456,5 @@ No changes
 |WorkEffortStatus |reason |Added |No |NA
 |WorkEffortTypeAttr |description |Added |No |NA
 |WorkOrderItemFulfillment |shipGroupSeqId |Added |No |NA
+|UserLogin |userFullName |Added |No |NA
 |=================================================================

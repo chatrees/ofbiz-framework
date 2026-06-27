@@ -18,11 +18,15 @@
  */
 package org.apache.ofbiz.webapp.control;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.FilterConfig;
@@ -30,10 +34,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import org.junit.Before;
-import org.junit.Test;
-
-public class ControlFilterTests {
+public final class ControlFilterTests {
 
     private FilterConfig config;
     private ControlFilter filter;
@@ -42,7 +43,7 @@ public class ControlFilterTests {
     private FilterChain next;
     private HttpSession session;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         config = mock(FilterConfig.class);
         when(config.getInitParameter(anyString())).thenReturn(null);
@@ -53,7 +54,14 @@ public class ControlFilterTests {
         when(req.getContextPath()).thenReturn("");
         resp = mock(HttpServletResponse.class);
         next = mock(FilterChain.class);
+        System.setProperty("ControlFilterTests", "bypassPreventsStreamExploitation");
         filter = new ControlFilter();
+
+    }
+
+    @AfterEach
+    public void tearDown() {
+        System.clearProperty("ControlFilterTests");
     }
 
     @Test

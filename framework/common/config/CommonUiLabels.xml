@@ -1641,6 +1641,10 @@
         <value xml:lang="zh-CN">取消所有</value>
         <value xml:lang="zh-TW">取消全部</value>
     </property>
+    <property key="CommonCancelDate">
+        <value xml:lang="en">Cancel Date</value>
+        <value xml:lang="fr">Date d'annulation</value>
+    </property>
     <property key="CommonCancelDone">
         <value xml:lang="ar">إلغاء/إتمام</value>
         <value xml:lang="cs">Storno/Dokončeno</value>
@@ -3688,9 +3692,8 @@
         <value xml:lang="zh-TW">電子郵件</value>
     </property>
     <property key="CommonEmptyHeader">
-        <value xml:lang="en" xml:space="preserve" />
-        <value xml:lang="es" xml:space="preserve" />
-        <value xml:lang="es-MX" xml:space="preserve" />
+        <!-- do not  remove this! No need to be translated, "en" is the default for all labels -->
+        <value xml:lang="en" xml:space="preserve" > </value>
     </property>
     <property key="CommonEnable">
         <value xml:lang="ar">تفعيل</value>
@@ -5556,6 +5559,7 @@
         <value xml:lang="en">Hold</value>
         <value xml:lang="es">Pausa</value>
         <value xml:lang="es-MX">Pausa</value>
+        <value xml:lang="fr">Pause</value>
         <value xml:lang="nl">In wacht</value>
     </property>
     <property key="CommonHome">
@@ -10270,6 +10274,10 @@
         <value xml:lang="zh-CN">重置</value>
         <value xml:lang="zh-TW">重設</value>
     </property>
+    <property key="CommonRestart">
+        <value xml:lang="en">Restart</value>
+        <value xml:lang="fr">Redémarrer</value>
+    </property>
     <property key="CommonResultLookup">
         <value xml:lang="ar">نتيجة البحث</value>
         <value xml:lang="cs">Výsledek vyhledávání</value>
@@ -12458,6 +12466,10 @@
         <value xml:lang="zh">成本价格差乘以</value>
         <value xml:lang="zh-TW">成本價格差乘以</value>
     </property>
+    <property key="CommonTotalDone">
+        <value xml:lang="en">Total done</value>
+        <value xml:lang="fr">Total terminé</value>
+    </property>
     <property key="CommonTotalPercProfit">
         <value xml:lang="ar">إجمالي نسبة الربح</value>
         <value xml:lang="cs">Celkové procento zisku</value>
@@ -13730,6 +13742,15 @@
         <value xml:lang="zh-CN">邮编</value>
         <value xml:lang="zh-TW">郵遞區號</value>
     </property>
+    <property key="CommonTypeToFilter">
+        <value xml:lang="ar">تصفية</value>
+        <value xml:lang="de">filtern</value>
+        <value xml:lang="en">filter</value>
+        <value xml:lang="es">filtrar</value>
+        <value xml:lang="es-CL">filtrar</value>
+        <value xml:lang="es-MX">filtrar</value>
+        <value xml:lang="fr">filtrer</value>
+    </property>
     <property key="Content">
         <value xml:lang="ar">المحتوى</value>
         <value xml:lang="cs">Obsah</value>
@@ -14543,6 +14564,25 @@
         <value xml:lang="vi">Từ ngày</value>
         <value xml:lang="zh">开始日期</value>
         <value xml:lang="zh-TW">開始日期</value>
+    </property>
+    <property key="FormFieldTitle_filterButton">
+        <value xml:lang="ar">مصفاة</value>
+        <value xml:lang="cs">Filtr</value>
+        <value xml:lang="de">Filter</value>
+        <value xml:lang="en">Filter</value>
+        <value xml:lang="es">Filtro</value>
+        <value xml:lang="fr">Filtrer</value>
+        <value xml:lang="hi-IN">फ़िल्टर</value>
+        <value xml:lang="it">Filtra</value>
+        <value xml:lang="ja">フィルタ</value>
+        <value xml:lang="pt">Filtrar</value>
+        <value xml:lang="pt-BR">Filtro</value>
+        <value xml:lang="ro">Filtreaza</value>
+        <value xml:lang="ru">Фильтр</value>
+        <value xml:lang="th">Filter</value>
+        <value xml:lang="vi">Bộ lọc</value>
+        <value xml:lang="zh">过滤器</value>
+        <value xml:lang="zh-TW">篩選器</value>
     </property>
     <property key="FormFieldTitle_hasTable">
         <value xml:lang="ar">يحوز على جدول</value>

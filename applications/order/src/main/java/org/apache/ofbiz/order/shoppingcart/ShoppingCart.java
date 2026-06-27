@@ -76,6 +76,7 @@ import org.apache.ofbiz.product.product.ProductWorker;
 import org.apache.ofbiz.product.store.ProductStoreWorker;
 import org.apache.ofbiz.service.GenericServiceException;
 import org.apache.ofbiz.service.LocalDispatcher;
+import org.apache.ofbiz.service.ServiceContainer;
 import org.apache.ofbiz.service.ServiceUtil;
 
 /**
@@ -166,6 +167,7 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     private Timestamp cartCreatedTs = UtilDateTime.nowTimestamp();
 
     private transient Delegator delegator = null;
+    private LocalDispatcher dispatcher = null;
     private String delegatorName = null;
 
     private String productStoreId = null;
@@ -205,6 +207,7 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /** Creates a new cloned ShoppingCart Object. */
     public ShoppingCart(ShoppingCart cart) {
         this.delegator = cart.getDelegator();
+        this.dispatcher = cart.getDispatcher();
         this.delegatorName = delegator.getDelegatorName();
         this.productStoreId = cart.getProductStoreId();
         this.doPromotions = cart.getDoPromotions();
@@ -264,10 +267,11 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     }
 
     /** Creates new empty ShoppingCart object. */
-    public ShoppingCart(Delegator delegator, String productStoreId, String webSiteId, Locale locale, String currencyUom,
+    public ShoppingCart(LocalDispatcher dispatcher, String productStoreId, String webSiteId, Locale locale, String currencyUom,
                         String billToCustomerPartyId, String billFromVendorPartyId) {
 
-        this.delegator = delegator;
+        this.dispatcher = dispatcher;
+        this.delegator = dispatcher.getDelegator();
         this.delegatorName = delegator.getDelegatorName();
         this.productStoreId = productStoreId;
         this.webSiteId = webSiteId;
@@ -298,6 +302,11 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
         }
 
     }
+    public ShoppingCart(Delegator delegator, String productStoreId, String webSiteId, Locale locale, String currencyUom,
+                        String billToCustomerPartyId, String billFromVendorPartyId) {
+        this(getDispatcher(delegator), productStoreId, webSiteId, locale, currencyUom,
+                billToCustomerPartyId, billFromVendorPartyId);
+    }
 
 
     /** Creates new empty ShoppingCart object. */
@@ -316,6 +325,19 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
             delegator = DelegatorFactory.getDelegator(delegatorName);
         }
         return delegator;
+    }
+
+    /** get dispatcher */
+    public LocalDispatcher getDispatcher() {
+        return dispatcher != null
+                ? dispatcher
+                : getDispatcher(this.delegator);
+    }
+    public static LocalDispatcher getDispatcher(Delegator delegator) {
+        return ServiceContainer.getLocalDispatcher("ShoppingCart",
+                    delegator != null
+                            ? delegator
+                            : DelegatorFactory.getDelegator("default"));
     }
 
     /** get product store */
@@ -917,16 +939,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
             }
         }
         return productList;
-    }
-
-    /** Ensure item total quantity */
-    public void ensureItemsQuantity(List<ShoppingCartItem> cartItems, LocalDispatcher dispatcher, BigDecimal quantity)
-            throws CartItemModifyException {
-        for (ShoppingCartItem item : cartItems) {
-            if (item.getQuantity() != quantity) {
-                item.setQuantity(quantity, dispatcher, this);
-            }
-        }
     }
 
     /** Ensure item total quantity */
@@ -2735,7 +2747,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
      * Sets @param shippingContactMechId in all ShipInfo(ShipGroups) associated
      * with this ShoppingCart
-     * <p>
      * @param shippingContactMechId
      */
     public void setAllShippingContactMechId(String shippingContactMechId) {
@@ -2763,7 +2774,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
      * Sets @param shipmentMethodTypeId in all ShipInfo(ShipGroups) associated
      * with this ShoppingCart
-     * <p>
      * @param shipmentMethodTypeId
      */
     public void setAllShipmentMethodTypeId(String shipmentMethodTypeId) {
@@ -2831,7 +2841,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
      * Sets @param shippingInstructions in all ShipInfo(ShipGroups) associated
      * with this ShoppingCart
-     * <p>
      * @param shippingInstructions
      */
     public void setAllShippingInstructions(String shippingInstructions) {
@@ -2860,7 +2869,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
     * Sets @param maySplit in all ShipInfo(ShipGroups) associated
     * with this ShoppingCart
-    * <p>
     * @param maySplit
     */
     public void setAllMaySplit(Boolean maySplit) {
@@ -2897,7 +2905,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
     * Sets @param giftMessage in all ShipInfo(ShipGroups) associated
     * with this ShoppingCart
-    * <p>
     * @param giftMessage
     */
     public void setAllGiftMessage(String giftMessage) {
@@ -2930,7 +2937,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
     * Sets @param isGift in all ShipInfo(ShipGroups) associated
     * with this ShoppingCart
-    * <p>
     * @param isGift
     */
     public void setAllIsGift(Boolean isGift) {
@@ -2970,7 +2976,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
     * Sets @param carrierPartyId in all ShipInfo(ShipGroups) associated
     * with this ShoppingCart
-    * <p>
     * @param carrierPartyId
     */
     public void setAllCarrierPartyId(String carrierPartyId) {
@@ -3028,7 +3033,6 @@ public class ShoppingCart implements Iterable<ShoppingCartItem>, Serializable {
     /**
     * Sets @param productStoreShipMethId in all ShipInfo(ShipGroups) associated
     * with this ShoppingCart
-    * <p>
     * @param productStoreShipMethId
     */
     public void setAllProductStoreShipMethId(String productStoreShipMethId) {

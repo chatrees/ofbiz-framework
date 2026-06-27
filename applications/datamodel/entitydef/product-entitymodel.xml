@@ -1012,6 +1012,9 @@ under the License.
         <field name="defaultWeightUomId" type="id"></field>
         <field name="geoPointId" type="id"></field>
         <field name="facilityLevel" type="numeric"><description>This field will define the level of facility.</description></field>
+        <field name="autoReservePrun" type="indicator"><description>Flag to control if automated inventory reservation should be performed when a production run reaches the printed/approved status.</description></field>
+        <field name="allowInventoryReallocation" type="indicator"><description>Flag to control if high-priority Production Runs can reallocate stock from others.</description></field>
+        <field name="reconcilePrunBackorders" type="indicator"><description>Flag to enable automated settlement of production run backorders. If enabled (Y), the system will automatically satisfy backorders both in real-time (upon inventory receipt via SECA) and during the nightly scheduled job.</description></field>
         <prim-key field="facilityId"/>
         <relation type="one" fk-name="FACILITY_FCTYP" rel-entity-name="FacilityType">
             <key-map field-name="facilityTypeId"/>
@@ -2976,14 +2979,27 @@ under the License.
                  title="Product and ProductAssoc View">
       <member-entity entity-alias="PD" entity-name="Product"/>
       <member-entity entity-alias="PDA" entity-name="ProductAssoc"/>
-      <alias name="productId" entity-alias="PD" field="productId"/>
-      <alias name="internalName" entity-alias="PD"  field="internalName"/>
-      <alias name="productIdTo" entity-alias="PDA" field="productIdTo"/>
-      <alias name="productAssocTypeId" entity-alias="PDA" field="productAssocTypeId"/>
-      <alias name="quantity" entity-alias="PDA" field="quantity"/>
-      <alias name="fromDate" entity-alias="PDA" field="fromDate"/>
+      <alias name="productId" entity-alias="PD"/>
+      <alias name="internalName" entity-alias="PD"/>
+      <alias name="productIdTo" entity-alias="PDA"/>
+      <alias name="productAssocTypeId" entity-alias="PDA"/>
+      <alias name="quantity" entity-alias="PDA"/>
+      <alias name="fromDate" entity-alias="PDA"/>
       <view-link entity-alias="PD" rel-entity-alias="PDA">
         <key-map field-name="productId"/>
+      </view-link>
+    </view-entity>
+    <view-entity entity-name="ProductAndAssocTo"
+                 package-name="org.apache.ofbiz.product.product"
+                 title="Product and ProductAssoc View by child (to) orientation">
+      <member-entity entity-alias="PD" entity-name="Product"/>
+      <member-entity entity-alias="PDA" entity-name="ProductAssoc"/>
+      <alias-all entity-alias="PD">
+          <exclude field="productId"/>
+      </alias-all>
+      <alias-all entity-alias="PDA"/>
+      <view-link entity-alias="PD" rel-entity-alias="PDA">
+        <key-map field-name="productId" rel-field-name="productIdTo"/>
       </view-link>
     </view-entity>
     <entity entity-name="ProductAssocType"

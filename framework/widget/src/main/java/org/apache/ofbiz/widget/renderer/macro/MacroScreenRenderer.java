@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.math.BigDecimal;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,7 +40,9 @@ import org.apache.ofbiz.base.util.UtilGenerics;
 import org.apache.ofbiz.base.util.UtilHttp;
 import org.apache.ofbiz.base.util.UtilMisc;
 import org.apache.ofbiz.base.util.UtilProperties;
+import org.apache.ofbiz.base.util.UtilRandom;
 import org.apache.ofbiz.base.util.UtilValidate;
+import org.apache.ofbiz.base.util.collections.MapStack;
 import org.apache.ofbiz.base.util.template.FreeMarkerWorker;
 import org.apache.ofbiz.entity.Delegator;
 import org.apache.ofbiz.entity.GenericValue;
@@ -125,7 +126,7 @@ public class MacroScreenRenderer implements ScreenStringRenderer {
                 Object value = parameter.getValue();
                 if (value instanceof String) {
                     sb.append('"');
-                    sb.append(((String) value).replaceAll("\"", "\\\\\""));
+                    sb.append(((String) value).replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$"));
                     sb.append('"');
                 } else {
                     sb.append(value);
@@ -271,8 +272,7 @@ public class MacroScreenRenderer implements ScreenStringRenderer {
         String targetWindow = link.getTargetWindow(context);
         String target = link.getTarget(context);
 
-        String uniqueItemName = link.getModelScreen().getName() + "_LF_"
-                + UtilMisc.<String>addToBigDecimalInMap(context, "screenUniqueItemIndex", BigDecimal.ONE);
+        String uniqueItemName = UtilRandom.getUnique(link.getModelScreen().getName() + "_", true);
 
         String linkType = WidgetWorker.determineAutoLinkType(link.getLinkType(), target, link.getUrlMode(), request);
         String actionUrl = "";
@@ -710,6 +710,15 @@ public class MacroScreenRenderer implements ScreenStringRenderer {
         parameters.put("showMore", showMore);
         parameters.put("collapsed", collapsed);
         parameters.put("javaScriptEnabled", javaScriptEnabled);
+        String screenHeader = screenlet.getScreenHeader(context);
+        if (UtilValidate.isNotEmpty(screenHeader)) {
+            try {
+                StringWriter localWriter = new StringWriter();
+                ScreenRenderer screenRenderer = new ScreenRenderer(localWriter, MapStack.create(context), this);
+                screenRenderer.render(screenHeader);
+                parameters.put("screenHeader", localWriter.getBuffer().toString());
+            } catch (GeneralException | ParserConfigurationException | SAXException ignored) { }
+        }
         executeMacro(writer, "renderScreenletBegin", parameters);
     }
 

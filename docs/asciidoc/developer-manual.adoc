@@ -83,9 +83,9 @@ component-name-here/
 ├── servicedef           - Defined services.
 ├── src/
     ├── docs/            - component documentation source
-    └── main/groovy/     - A collection of scripts written in Groovy
+    └── main/groovy/     - A collection of scripts written in Groovy for integration tests (needs DB access or simply creation of delegator or dispatcher that ultimately needs use of dispatcherFactory)
     └── main/java/       - java source code
-    └── test/groovy/     - A collection of scripts written in Groovy
+    └── test/groovy/     - A collection of scripts written in Groovy for unit-tests  (no DB access need, or simply creation of delegator or dispatcher that ultimately needs use of dispatcherFactory)
     └── test/java/       - java unit-tests
 ├── testdef              - Defined integration-tests
 ├── webapp               - One or more Java webapps including the control servlet
@@ -228,6 +228,10 @@ include::applications/datamodel/DATAMODEL_CHANGES.adoc[leveloffset=+2]
 == Service Engine
 A description of the service engine can be found at the
 https://cwiki.apache.org/confluence/display/OFBIZ/Service+Engine+Guide[OFBiz wiki Service Engine Guide]
+
+== REST API
+
+include::framework/rest-api/src/docs/asciidoc/rest-api.adoc[leveloffset=+1]
 
 === Declaration and Implementation
 

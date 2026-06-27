@@ -52,4 +52,10 @@ under the License.
     <Enumeration description="Predecessor" enumCode="PREDECESSOR" enumId="WF_PREDECESSOR" enumTypeId="WORKFLOW" sequenceId="1"/>
     <Enumeration description="Successor" enumCode="SUCCESSOR" enumId="WF_SUCCESSOR" enumTypeId="WORKFLOW" sequenceId="2"/>
 
+    <!-- Rate Type for Labor Cost Data -->
+    <RateType rateTypeId="FLC" description="Fully Loaded Cost (price for WorkEffort)"/>
+
+    <!-- Inventory Detail Reason for Trinity Synchronization -->
+    <Enumeration description="Trinity of Truth Synchronization" enumCode="VAR_INTEGRITY_SYNC" enumId="VAR_INTEGRITY_SYNC" sequenceId="99" enumTypeId="IID_REASON"/>
+
 </entity-engine-xml>

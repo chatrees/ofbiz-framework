@@ -40,6 +40,8 @@ $(document).ready(function () {
     });
     //initializing UI combobox dropdown by overriding its methods.
     ajaxAutoCompleteDropDown();
+    //initializing events listener
+    initializeEvents();
     // bindObservers will add observer on passed html section when DOM is ready.
     bindObservers("body");
 
@@ -92,21 +94,81 @@ $(document).ready(function () {
     }
 });
 
+/* initializeEvents function contains the code of adding events at the loading of the page */
+function initializeEvents() {
+
+    // Adding observer for checkboxes for select all action.
+    $("body").on("click", "[type=checkbox]", function () {
+        var action_checkbox = jQuery(this),
+            parent_action = action_checkbox.is(".selectAll") ? action_checkbox : getFormFields(getForm(action_checkbox)).filter(".selectAll");
+        if (parent_action.length !== 0) {
+            addSelectAllObserver(action_checkbox);
+        }
+    });
+
+    $("body").on("click", "[data-dialog-url]", function () {
+        var element = jQuery(this);
+        var url = element.data("dialog-url");
+        var title = element.data("dialog-title");
+        var width = element.data("dialog-width");
+        var height = element.data("dialog-height");
+        var params = element.data("dialog-params");
+        var dialogContainer = jQuery('<div/>');
+        dialogContainer.dialog({
+            autoOpen: false,
+            title: title,
+            height: height,
+            width: width,
+            modal: true,
+            closeOnEscape: true,
+            close: function () {
+                dialogContainer.dialog('destroy');
+            },
+            open: function () {
+                jQuery.ajax({
+                    url: url,
+                    type: "POST",
+                    data: params,
+                    success: function (data) {
+                        dialogContainer.html(data);
+                        bindObservers(dialogContainer);
+                    },
+                    error: (xhr) => {
+                        // unauthorized user, reload page with the link id so we can reopen the modal
+                        if (xhr.status === 401) {
+                            const url = new URL(window.location.href);
+                            url.searchParams.append(SP_CLICK_ON, element.attr('id'));
+                            window.location.replace(url.toString());
+                        } else {
+                            // display some feedback in the modal body
+                            dialogContainer.text(`An unexpected server error occurred (status : ${ xhr.status }).`);
+                        }
+                    }
+                });
+            }
+        });
+        dialogContainer.dialog("open");
+        dialogContainer.on("closeCurrentModalAfterAjaxSubmitFormUpdateAreasInSuccess", function () {
+            dialogContainer.dialog("destroy");
+        });
+    });
+
+    $("body").on("click", "[data-confirm-message]", function (e) {
+        var element = jQuery(this);
+        var confirmMessage = element.data("confirm-message");
+        if (!confirm(confirmMessage)) {
+            e.preventDefault();
+        }
+    });
+
+}
+
 /* bindObservers function contains the code of adding observers and it can be called for specific section as well
    when we need to add observer on section which is updated by Ajax.
    Example: bindObservers("sectionSelector");
    sectionSelector can be Id, Class and Element name.
 */
 function bindObservers(bind_element) {
-
-    // Adding observer for checkboxes for select all action.
-    jQuery(bind_element).on("click", "[type=checkbox]", function () {
-        var action_checkbox = jQuery(this),
-            parent_action = action_checkbox.is(".selectAll") ? action_checkbox : action_checkbox.getForm().getFormFields().filter(".selectAll");
-        if (parent_action.length !== 0) {
-            addSelectAllObserver(action_checkbox);
-        }
-    });
 
     // If parent checkbox is already checked on DOM ready then check its child checkboxes also.
     if (jQuery(".selectAll").is(":checked")) {
@@ -181,62 +243,10 @@ function bindObservers(bind_element) {
         var params = element.data("inplace-editor-params");
         ajaxInPlaceEditDisplayField(id, url, (new Function("return " + params + ";")()));
     });
-    jQuery(bind_element).on("click", "[data-dialog-url]", function () {
-        var element = jQuery(this);
-        var url = element.data("dialog-url");
-        var title = element.data("dialog-title");
-        var width = element.data("dialog-width");
-        var height = element.data("dialog-height");
-        var params = element.data("dialog-params");
-        var dialogContainer = jQuery('<div/>');
-        dialogContainer.dialog({
-            autoOpen: false,
-            title: title,
-            height: height,
-            width: width,
-            modal: true,
-            closeOnEscape: true,
-            close: function () {
-                dialogContainer.dialog('destroy');
-            },
-            open: function () {
-                jQuery.ajax({
-                    url: url,
-                    type: "POST",
-                    data: params,
-                    success: function (data) {
-                        dialogContainer.html(data);
-                        bindObservers(dialogContainer);
-                    },
-                    error: (xhr) => {
-                        // unauthorized user, reload page with the link id so we can reopen the modal
-                        if (xhr.status === 401) {
-                            const url = new URL(window.location.href);
-                            url.searchParams.append(SP_CLICK_ON, element.attr('id'));
-                            window.location.replace(url.toString());
-                        } else {
-                            // display some feedback in the modal body
-                            dialogContainer.text(`An unexpected server error occurred (status : ${ xhr.status }).`);
-                        }
-                    }
-                });
-            }
-        });
-        dialogContainer.dialog("open");
-        dialogContainer.on("closeCurrentModalAfterAjaxSubmitFormUpdateAreasInSuccess", function () {
-            dialogContainer.dialog("destroy");
-        });
-    });
-    jQuery(bind_element).on("click", "[data-confirm-message]", function (e) {
-        var element = jQuery(this);
-        var confirmMessage = element.data("confirm-message");
-        if (!confirm(confirmMessage)) {
-            e.preventDefault();
-        }
-    });
+
     jQuery(bind_element).find("[data-lookup-presentation]").each(function () {
         var element = jQuery(this);
-        var form = element._form();
+        var form = getForm(this);
         var formName = form.attr("name");
         if (!formName) {
             console.log("Developer: For lookups to work you must provide a form name!");
@@ -452,7 +462,7 @@ function initDateTimePicker(self) {
 
 // addSelectAllObserver: This function will add observers to checkboxes which belongs to select all functionality.
 function addSelectAllObserver(action_checkbox) {
-    var form_fields = jQuery(action_checkbox).getForm().getFormFields(),
+    var form_fields = getFormFields(getForm(action_checkbox));
         all_child = form_fields.filter(":checkbox:not(:disabled):not(.selectAll)"),
         select_child = all_child.filter(".selectAllChild").size() > 0 ? all_child.filter(".selectAllChild") : all_child,
         parent_checkbox = form_fields.filter(".selectAll"),
@@ -485,23 +495,23 @@ function addSelectAllObserver(action_checkbox) {
 }
 
 // getFormFields: This utility function return all form fields (inside and outside form)
-jQuery.fn.getFormFields = function () {
-    var id = jQuery(this).attr("id");
+function getFormFields(element) {
+    const id = jQuery(element).attr('id');
     if (id === undefined) {
-        return jQuery(this).find(":input");
+        return jQuery(element).find(':input');
     } else {
-        return jQuery.merge(jQuery(this).find(":input"), jQuery(":input[form=" + id + "]"));
+        return jQuery.merge(jQuery(element).find(':input'), jQuery(':input[form=' + id + ']'));
     }
 }
 
 // getForm: This utility function return form of the field.
-jQuery.fn.getForm = function () {
-    var form_id = jQuery(this).attr("form");
+function getForm(element) {
+    const formId = jQuery(element).attr('form');
     // Get closest form if no form id specified else get the form using id.
-    if (form_id === undefined) {
-        return jQuery(this).closest("form");
+    if (formId === undefined) {
+        return jQuery(element).closest('form');
     } else {
-        return jQuery("#" + form_id);
+        return jQuery('#' + formId);
     }
 }
 
@@ -843,6 +853,12 @@ function ajaxSubmitFormUpdateAreas(formName, areaCsvString, close) {
                 areaId = $form[0].target
             }
             updateArea(areaId, data)
+            var bindObserversArea = "#" + areaId
+            if (/^embedded/.test(areaId)) {
+                const newContentId = $(data).filter('.embeddedScreen').attr('id');
+                bindObserversArea = "#" + newContentId;
+            }
+            bindObservers(bindObserversArea);
         } else {
             if (containsErrorMessages(data)) {
                 displayErrorMessages(data)
@@ -1604,6 +1620,9 @@ var importLibrary = function () {
 
         jQuery.when.apply(jQuery,
             jQuery.map(urls, function (url) {
+                if (!url) {
+                    return null;
+                }
                 if (!importLibraryFiles.has(url)) {
                     var deferObj = (url.endsWith(".css") ?
                         jQuery.get(url, function (css) {

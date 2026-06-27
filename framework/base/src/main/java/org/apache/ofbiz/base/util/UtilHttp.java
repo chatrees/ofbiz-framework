@@ -65,16 +65,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 
 import org.apache.commons.fileupload2.core.DiskFileItem;
 import org.apache.commons.fileupload2.core.DiskFileItemFactory;
 import org.apache.commons.fileupload2.core.FileItem;
 import org.apache.commons.fileupload2.core.FileUploadException;
 import org.apache.commons.fileupload2.jakarta.JakartaServletFileUpload;
-
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -93,6 +89,10 @@ import org.apache.ofbiz.widget.renderer.VisualTheme;
 
 import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * HttpUtil - Misc HTTP Utility Functions
@@ -230,7 +230,6 @@ public final class UtilHttp {
         if (isMultiPart) {
             // create the progress listener and add it to the session
             String encoding = request.getCharacterEncoding();
-            Charset charset = Charset.forName(encoding);
             JakartaServletFileUpload<DiskFileItem, DiskFileItemFactory> upload = UtilHttp.getServletFileUpload(request);
             FileUploadProgressListener listener = new FileUploadProgressListener();
             upload.setProgressListener(listener);
@@ -429,14 +428,19 @@ public final class UtilHttp {
                 if (stringValues.length > 0 && !paramEntry.getKey().equals("DUMMYPAGE")) {
                     for (String s : stringValues) {
                         // if the string contains only an URL beginning by http or ftp => no change to keep special chars
-                        if (UtilValidate.isValidUrl(s) && (s.indexOf("://") == 4 || s.indexOf("://") == 3)) {
+                        if (UtilValidate.isValidUrl(s)) {
                             params = params + s + " ";
                         } else if (UtilValidate.isUrlInString(s) && !s.isEmpty()) {
                             // if the string contains not only an URL => concatenate possible canonicalized before and after, w/o changing the URL
-                            String url = extractUrls(s).get(0); // There should be only 1 URL in a block, makes no sense else
-                            int start = s.indexOf(url);
-                            String after = (String) s.subSequence(start + url.length(), s.length());
-                            params = params + canonicalizeParameter((String) s.subSequence(0, start)) + url + canonicalizeParameter(after) + " ";
+                            List<String> extractedUrls = extractUrls(s);
+                            if (!extractedUrls.isEmpty()) {
+                                String url = extractedUrls.get(0); // There should be only 1 URL in a block, makes no sense else
+                                int start = s.indexOf(url);
+                                String after = (String) s.subSequence(start + url.length(), s.length());
+                                params = params + canonicalizeParameter((String) s.subSequence(0, start)) + url + canonicalizeParameter(after) + " ";
+                            } else {
+                                params = params + canonicalizeParameter(s) + " ";
+                            }
                         } else {
                             // Simple string to canonicalize
                             params = params + canonicalizeParameter(s) + " ";
@@ -1639,7 +1643,7 @@ public final class UtilHttp {
     public static boolean isJavaScriptEnabled(HttpServletRequest request) {
         HttpSession session = request.getSession();
         Boolean javaScriptEnabled = (Boolean) session.getAttribute("javaScriptEnabled");
-        return javaScriptEnabled != null ? javaScriptEnabled : false;
+        return javaScriptEnabled != null ? javaScriptEnabled : true;
     }
 
     /**
@@ -1775,9 +1779,7 @@ public final class UtilHttp {
 
         Pattern pattern = Pattern.compile(
                 "\\b(((ht|f)tp(s?)\\:\\/\\/|~\\/|\\/)|www.)"
-                        + "(\\w+:\\w+@)?(([-\\w]+\\.)+(com|org|net|gov"
-                        + "|mil|biz|info|mobi|name|aero|jobs|museum"
-                        + "|travel|[a-z]{2}))(:[\\d]{1,5})?"
+                        + "(\\w+:\\w+@)?(([-\\w]+\\.)+([a-zA-Z]{2,}))(:[\\d]{1,5})?"
                         + "(((\\/([-\\w~!$+|.,=]|%[a-f\\d]{2})+)+|\\/)+|\\?|#)?"
                         + "((\\?([-\\w~!$+|.,*:]|%[a-f\\d{2}])+=?"
                         + "([-\\w~!$+|.,*:=]|%[a-f\\d]{2})*)"
@@ -1795,7 +1797,10 @@ public final class UtilHttp {
         if (result.isEmpty()) {
             Matcher matcher = pattern.matcher(input);
             while (matcher.find()) {
-                result.add(matcher.group());
+                String candidate = matcher.group();
+                if (UtilValidate.isValidUrl(candidate)) {
+                    result.add(candidate);
+                }
             }
         }
 

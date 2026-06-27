@@ -44,6 +44,22 @@ public abstract class GenericAbstractDispatcher implements LocalDispatcher {
     private ServiceDispatcher dispatcher = null;
     private String name = null;
 
+    @Override
+    public void initDispatchContext() {
+        ClassLoader loader;
+        try {
+            loader = Thread.currentThread().getContextClassLoader();
+        } catch (SecurityException e) {
+            loader = this.getClass().getClassLoader();
+        }
+        DispatchContext ctx = new DispatchContext(this.getName(), loader, this);
+        this.getDispatcher().register(ctx);
+        this.setCtx(ctx);
+        if (Debug.verboseOn()) {
+            Debug.logVerbose("[GenericDispatcher] : Created Dispatcher for: " + this.getName(), MODULE);
+        }
+    }
+
     /**
      * Gets ctx.
      * @return the ctx
@@ -104,7 +120,9 @@ public abstract class GenericAbstractDispatcher implements LocalDispatcher {
         Transaction suspendedTransaction = null;
         try {
             boolean beganTransaction = false;
-            suspendedTransaction = TransactionUtil.suspend();
+            if (TransactionUtil.isTransactionInPlace()) {
+                suspendedTransaction = TransactionUtil.suspend();
+            }
             try {
                 beganTransaction = TransactionUtil.begin();
                 try {

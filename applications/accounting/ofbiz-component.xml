@@ -30,6 +30,7 @@ under the License.
     <entity-resource type="data" reader-name="seed" loader="main" location="data/AccountingSystemPropertyData.xml"/>
     <entity-resource type="data" reader-name="seed" loader="main" location="data/AccountingPortletData.xml"/>
     <entity-resource type="data" reader-name="seed-initial" loader="main" location="data/AccountingScheduledServiceData.xml"/>
+    <entity-resource type="data" reader-name="demo" loader="main" location="data/ScheduledServicesDemoData.xml"/>
 
     <!-- General Payment Service Definitions -->
     <service-resource type="model" loader="main" location="servicedef/services_agreement.xml"/>
@@ -47,19 +48,6 @@ under the License.
     <service-resource type="model" loader="main" location="servicedef/services_rate.xml"/>
     <service-resource type="model" loader="main" location="servicedef/services_cost.xml"/>
     <service-resource type="model" loader="main" location="servicedef/services_sample.xml"/>
-
-    <!-- Payment Processor/Gateway Service Definitions -->
-    <service-resource type="model" loader="main" location="servicedef/services_sagepay.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_authorizedotnet.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_clearcommerce.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_cybersource.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_paypal.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_pccharge.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_rita.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_valuelink.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_verisign.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_orbital.xml"/>
-    <service-resource type="model" loader="main" location="servicedef/services_securepay.xml"/>
 
     <!-- Accounting Permission Services -->
     <service-resource type="model" loader="main" location="servicedef/services_perm.xml"/>
