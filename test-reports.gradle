@@ -19,37 +19,15 @@
 import groovy.xml.MarkupBuilder
 import groovy.xml.XmlSlurper
 
-// createTestReports (classic Ant-based), createModernTestReport (single-page) and
-// createFramedTestReport (navigable multi-page) all turn the JUnit suite XML written to
-// runtime/logs/test-results into an HTML report - split out of build.gradle into its own file
-// since it's self-contained and sizable, applied below so it still runs as part of every Gradle
-// invocation exactly as if it were declared inline.
+// createTestReport (single-page) and createFramedTestReport (navigable multi-page) turn the
+// JUnit suite XML written to runtime/logs/test-results into an HTML report - split out of
+// build.gradle into its own file since it's self-contained and sizable, applied below so it
+// still runs as part of every Gradle invocation exactly as if it were declared inline.
 def sysadminGroup = 'System Administration'
-
-task createTestReports(group: sysadminGroup, description: 'Generate HTML reports from junit XML output') {
-    doLast {
-        ant.taskdef(name: 'junitreport',
-            classname: 'org.apache.tools.ant.taskdefs.optional.junit.XMLResultAggregator',
-            classpath: configurations.junitReport.asPath)
-        ant.junitreport(todir: './runtime/logs/test-results') {
-            fileset(dir: './runtime/logs/test-results') {
-                include(name: '*.xml')
-            }
-            report(format:'frames', todir:'./runtime/logs/test-results/html')
-            report(format:'noframes', todir:'./runtime/logs/test-results/html')
-        }
-        // Ant's stock junit-frames.xsl/junit-noframes.xsl label this column "Type", but it actually
-        // renders the failure/error message and stack trace, not the bare exception type - relabel
-        // it post-generation rather than vendoring and maintaining a forked copy of Ant's templates.
-        fileTree('./runtime/logs/test-results/html') {
-            include '**/*.html'
-        }.each { file -> file.text = file.text.replace('>Type</th>', '>Failure Reason</th>') }
-    }
-}
 
 def modernReportCss() {
     // Hand-rolled, not a real Bootstrap import: same default palette/spacing/component shapes.
-    // Used two ways: inlined into modern-report.html so that report stays one portable file, and
+    // Used two ways: inlined into test-report.html so that report stays one portable file, and
     // written once as a shared junit-report.css alongside the framed report's many pages (referenced via
     // a same-directory relative <link>, so it's still a zero-external-network-request file:// doc -
     // see the 2026-08-07 "CSS/JS duplication" note in junit5-improvements-august2026.md).
@@ -145,6 +123,7 @@ table.bs-table tbody tr.row-skipped { color: var(--bs-secondary); }
 
 pre { white-space: pre-wrap; margin: 0; font-size: 0.85em; }
 .parse-error { color: var(--bs-danger); font-weight: bold; }
+.suite-status-links { margin: 0 0 1rem; font-size: 0.9rem; }
 
 .nav-pane { padding: 0.75rem; }
 .nav-section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--bs-secondary); margin: 1rem 0 0.4rem; }
@@ -209,6 +188,14 @@ def suiteSlug(String name) {
     (name ?: '').replaceAll('[^A-Za-z0-9_-]', '_')
 }
 
+def simpleClassName(String fqcn) {
+    if (!fqcn) {
+        return ''
+    }
+    int lastDot = fqcn.lastIndexOf('.')
+    lastDot >= 0 ? fqcn.substring(lastDot + 1) : fqcn
+}
+
 def escapeHtmlText(String s) {
     // Everywhere else a suite/test name reaches these reports it's passed as a MarkupBuilder
     // element-content argument, which escapes it automatically. renderFramedSuitePage's
@@ -229,22 +216,22 @@ def renderStatCards(Map counts, Closure statusHrefFn, List extraCards = [], Stri
     html.div(wrapperAttrs) {
         // Tests/Failures/Errors/Skipped are links (matching the classic report's
         // all-tests.html/alltests-fails.html/etc.) that filter the results below down to just
-        // that status, in-page or on a dedicated page depending on statusHrefFn.
-        div('class': 'stat-card') {
-            a('class': 'stat-value', href: statusHrefFn('tests'), title: 'Show all tests', "${counts.tests}")
-            div('class': 'stat-label', 'Tests')
-        }
-        div('class': 'stat-card') {
-            a('class': 'stat-value', href: statusHrefFn('failures'), title: 'Show only failures', "${counts.failures}")
-            div('class': 'stat-label', 'Failures')
-        }
-        div('class': 'stat-card') {
-            a('class': 'stat-value', href: statusHrefFn('errors'), title: 'Show only errors', "${counts.errors}")
-            div('class': 'stat-label', 'Errors')
-        }
-        div('class': 'stat-card') {
-            a('class': 'stat-value', href: statusHrefFn('skipped'), title: 'Show only skipped', "${counts.skipped}")
-            div('class': 'stat-label', 'Skipped')
+        // that status, in-page or on a dedicated page depending on statusHrefFn. A null
+        // statusHrefFn means "this page can't be filtered" - it renders the same four cards as
+        // plain values instead, for the already-pre-filtered static status pages, which carry
+        // neither the #filters block nor junit-report.js a "#status-*" href would need.
+        [[status: 'tests', label: 'Tests', value: counts.tests, title: 'Show all tests'],
+         [status: 'failures', label: 'Failures', value: counts.failures, title: 'Show only failures'],
+         [status: 'errors', label: 'Errors', value: counts.errors, title: 'Show only errors'],
+         [status: 'skipped', label: 'Skipped', value: counts.skipped, title: 'Show only skipped']].each { card ->
+            div('class': 'stat-card') {
+                if (statusHrefFn) {
+                    a('class': 'stat-value', href: statusHrefFn(card.status), title: card.title, "${card.value}")
+                } else {
+                    div('class': 'stat-value', "${card.value}")
+                }
+                div('class': 'stat-label', card.label)
+            }
         }
         div('class': 'stat-card') {
             div('class': 'stat-value', counts.successRate)
@@ -264,12 +251,14 @@ def renderStatCards(Map counts, Closure statusHrefFn, List extraCards = [], Stri
     writer.toString()
 }
 
-def buildOverallSummaryTable(List suites, Closure statusHrefFn) {
+// Shared by buildOverallSummaryTable (the HTML report's own summary cards) and createTestReport's
+// console println below, so the two can never disagree about what "the totals" are.
+def computeOverallCounts(List suites) {
     def toInt = { String s -> (s ==~ /\d+/) ? s.toInteger() : 0 }
     def toSeconds = { String s -> (s ==~ /-?[0-9]*\.?[0-9]+/) ? s.toDouble() : 0.0 }
     // List.sum(Closure) returns null (not 0) on an empty list, unlike the no-arg sum() - discovered
     // live when a malformed CLI invocation purged runtime/logs/test-results/ (item 3's own fix) and
-    // then failed before any suite ran, leaving createModernTestReport/createFramedTestReport to
+    // then failed before any suite ran, leaving createTestReport/createFramedTestReport to
     // parse zero suites and crash on "null as int" instead of just rendering "0 tests".
     def totalTests = (suites.sum { toInt(it.tests) } ?: 0) as int
     def totalFailures = (suites.sum { toInt(it.failures) } ?: 0) as int
@@ -279,10 +268,12 @@ def buildOverallSummaryTable(List suites, Closure statusHrefFn) {
     def successRate = totalTests > 0
             ? String.format('%.2f%%', ((totalTests - totalFailures - totalErrors) / (double) totalTests) * 100)
             : 'N/A'
-    renderStatCards([tests: totalTests, failures: totalFailures, errors: totalErrors,
-                      skipped: totalSkipped, successRate: successRate,
-                      time: String.format('%.3f', totalTime)],
-            statusHrefFn, [], 'overall-summary')
+    [tests: totalTests, failures: totalFailures, errors: totalErrors, skipped: totalSkipped,
+     successRate: successRate, time: String.format('%.3f', totalTime)]
+}
+
+def buildOverallSummaryTable(List suites, Closure statusHrefFn) {
+    renderStatCards(computeOverallCounts(suites), statusHrefFn, [], 'overall-summary')
 }
 
 def buildSummaryTable(List suites, Closure hrefFn) {
@@ -313,7 +304,13 @@ def buildSummaryTable(List suites, Closure hrefFn) {
     writer.toString()
 }
 
-def buildSuiteDetailFragment(Map suite) {
+def buildSuiteDetailFragment(Map suite, boolean linked = true) {
+    // linked = true (the default) is the live, JS-filterable suite page: stat cards link to
+    // "#status-*" and report the suite's own totals. linked = false is a static status page
+    // (renderFramedSuiteStatusPage), whose `suite` has already had its testcases filtered down to
+    // one status and which loads neither the #filters block nor junit-report.js - there the cards
+    // must be plain values (a "#status-*" href would be a dead link) counted off the filtered
+    // testcases actually rendered in the table below, not off the whole suite's attributes.
     def writer = new StringWriter()
     def html = new MarkupBuilder(writer)
     html.div {
@@ -326,16 +323,24 @@ def buildSuiteDetailFragment(Map suite) {
             // summing needed) plus Time Stamp/Host as extraCards, meaningful for one suite but not
             // for a sum across many.
             def toInt = { String s -> (s ==~ /\d+/) ? s.toInteger() : 0 }
-            def tests = toInt(suite.tests)
-            def failures = toInt(suite.failures)
-            def errors = toInt(suite.errors)
+            def toSeconds = { String s -> (s ==~ /-?[0-9]*\.?[0-9]+/) ? s.toDouble() : 0.0 }
+            def tests = linked ? toInt(suite.tests) : suite.testcases.size()
+            def failures = linked ? toInt(suite.failures) : suite.testcases.count { it.status == 'fail' }
+            def errors = linked ? toInt(suite.errors) : suite.testcases.count { it.status == 'error' }
             def successRate = tests > 0
                     ? String.format('%.2f%%', ((tests - failures - errors) / (double) tests) * 100)
                     : 'N/A'
-            mkp.yieldUnescaped(renderStatCards(
-                    [tests: suite.tests, failures: suite.failures, errors: suite.errors,
-                     skipped: suite.skipped, successRate: successRate, time: suite.time],
-                    { status -> "#status-${status}" },
+            // Success rate and Time are derived from the same set of testcases as the four counts
+            // above, so a filtered page's cards stay internally consistent with its own table
+            // rather than mixing filtered counts with whole-suite figures.
+            def counts = linked
+                    ? [tests: suite.tests, failures: suite.failures, errors: suite.errors,
+                       skipped: suite.skipped, successRate: successRate, time: suite.time]
+                    : [tests: tests, failures: failures, errors: errors,
+                       skipped: suite.testcases.count { it.status == 'skipped' }, successRate: successRate,
+                       time: String.format('%.3f', (suite.testcases.sum { toSeconds(it.time) } ?: 0.0) as double)]
+            def statusHrefFn = linked ? { String status -> "#status-${status}" } : null
+            mkp.yieldUnescaped(renderStatCards(counts, statusHrefFn,
                     [[label: 'Time Stamp', value: suite.timestamp ?: 'N/A'],
                      [label: 'Host', value: suite.hostname ?: 'N/A']]))
             table('class': 'detail bs-table') {
@@ -343,12 +348,13 @@ def buildSuiteDetailFragment(Map suite) {
                 tbody {
                     suite.testcases.each { tc ->
                         tr('class': "row-${tc.status}") {
-                            // tc.name is the report-facing test identity JupiterTestSuite.reportingName()
-                            // already builds as "ClassName.methodName - Display Name" (or the bare method
-                            // name for plain JUnit 3 suites) - tc.classname is a synthetic bridge class
-                            // (e.g. JupiterTestExtension$JupiterTestSuite$JupiterLeafTest for Jupiter-backed
-                            // suites) that's meaningless to a reader, so it's deliberately not shown here.
-                            td(tc.name)
+                            // tc.classname is a real class name for both engines (JUnit 3 always
+                            // reported one; Jupiter's JupiterClassRunner reports the real Jupiter class
+                            // directly, no synthetic bridge class involved) - shown as its simple name
+                            // ahead of tc.name (the bare method name, plus " - Display Name" when a
+                            // @DisplayName is present) so a report reader can tell which class a row
+                            // belongs to at a glance.
+                            td("${simpleClassName(tc.classname)}.${tc.name}")
                             td { span('class': "badge badge-${tc.status}", tc.status) }
                             td(tc.time)
                             td { pre(tc.failureReason ?: '') }
@@ -376,13 +382,13 @@ def renderModernReport(List suites) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Apache OFBiz Test Report</title>
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report</title>
 <style>
 ${css}
 </style>
 </head>
 <body>
-<div class="navbar-report"><h1>Apache OFBiz Test Report</h1></div>
+<div class="navbar-report"><h1>Apache OFBiz JUnit (Jupiter) Integration Test Report</h1></div>
 <div class="container">
 <h2>Summary</h2>
 ${overallSummary}
@@ -402,7 +408,7 @@ def renderFramedIndexPage() {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Apache OFBiz Test Report</title>
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report</title>
 </head>
 <frameset cols="20%,80%">
 <frame src="nav.html" name="nav">
@@ -411,7 +417,7 @@ def renderFramedIndexPage() {
 <body>
 <p>This report is designed to be viewed using the frames feature. If you see this
 message, you are using a non-frame-capable web client &mdash; use
-<a href="../modern-report.html">modern-report.html</a> instead.</p>
+<a href="../test-report.html">test-report.html</a> instead.</p>
 </body>
 </noframes>
 </frameset>
@@ -425,13 +431,16 @@ def renderFramedNavPage(List suites) {
     html.html {
         head {
             meta(charset: 'UTF-8')
-            title('Apache OFBiz Test Report: Suites')
+            title('Apache OFBiz JUnit (Jupiter) Integration Test Report: Suites')
             link(rel: 'stylesheet', href: 'junit-report.css')
         }
         body('class': 'nav-pane') {
             ul('class': 'nav-list') {
                 li { a('class': 'nav-link', href: 'overview.html', target: 'detail', 'Overview') }
                 li { a('class': 'nav-link', href: 'all-tests.html', target: 'detail', 'All Tests') }
+                li { a('class': 'nav-link', href: 'all-tests-fails.html', target: 'detail', 'All Failures') }
+                li { a('class': 'nav-link', href: 'all-tests-errors.html', target: 'detail', 'All Errors') }
+                li { a('class': 'nav-link', href: 'all-tests-skipped.html', target: 'detail', 'All Skipped') }
             }
             div('class': 'nav-section-label', 'Suites')
             ul('class': 'nav-list') {
@@ -451,11 +460,11 @@ def renderFramedOverviewPage(List suites) {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Apache OFBiz Test Report: Overview</title>
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report: Overview</title>
 <link rel="stylesheet" href="junit-report.css">
 </head>
 <body>
-<div class="navbar-report"><h1>Apache OFBiz Test Report</h1></div>
+<div class="navbar-report"><h1>Apache OFBiz JUnit (Jupiter) Integration Test Report</h1></div>
 <div class="container">
 <h2>Summary</h2>
 ${overallSummary}
@@ -478,23 +487,63 @@ def filterControlsHtml() {
 </div>'''
 }
 
-def renderFramedSuitePage(Map suite) {
+def renderFramedSuiteStatusLinksHtml(boolean hasFailsPage, boolean hasErrorsPage, String slug) {
+    def links = []
+    if (hasFailsPage) {
+        links << "<a href=\"suite-${slug}-fails.html\">Failures only</a>"
+    }
+    if (hasErrorsPage) {
+        links << "<a href=\"suite-${slug}-errors.html\">Errors only</a>"
+    }
+    links ? "<p class=\"suite-status-links\">${links.join(' | ')}</p>" : ''
+}
+
+def renderFramedSuitePage(Map suite, boolean hasFailsPage, boolean hasErrorsPage) {
     def detail = buildSuiteDetailFragment(suite)
     def suiteNameHtml = escapeHtmlText(suite.name)
+    def statusLinks = renderFramedSuiteStatusLinksHtml(hasFailsPage, hasErrorsPage, suiteSlug(suite.name))
     """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Apache OFBiz Test Report: ${suiteNameHtml}</title>
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report: ${suiteNameHtml}</title>
 <link rel="stylesheet" href="junit-report.css">
 </head>
 <body>
 <div class="navbar-report"><h1>${suiteNameHtml}</h1></div>
 <div class="container">
+${statusLinks}
 ${filterControlsHtml()}
 ${detail}
 </div>
 <script src="junit-report.js"></script>
+</body>
+</html>
+"""
+}
+
+def renderFramedSuiteStatusPage(Map suite, String status, String statusLabel) {
+    // Per-suite equivalent of renderFramedStatusPage, generated only when the suite actually has
+    // a test in that status - mirrors the old Ant report's per-class -fails/-errors pages, which
+    // only existed for classes with a failure/error.
+    def filteredSuite = suite + [testcases: suite.testcases.findAll { it.status == status }]
+    // linked = false: this page is already filtered and has no filter controls or JS, so its stat
+    // cards render as plain values counted off filteredSuite.testcases - see buildSuiteDetailFragment.
+    def detail = buildSuiteDetailFragment(filteredSuite, false)
+    def suiteNameHtml = escapeHtmlText(suite.name)
+    """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report: ${suiteNameHtml} - ${statusLabel}</title>
+<link rel="stylesheet" href="junit-report.css">
+</head>
+<body>
+<div class="navbar-report"><h1>${suiteNameHtml} - ${statusLabel}</h1></div>
+<div class="container">
+<p class="suite-status-links"><a href="suite-${suiteSlug(suite.name)}.html">&larr; Back to suite</a></p>
+${detail}
+</div>
 </body>
 </html>
 """
@@ -511,7 +560,7 @@ def buildAllTestsFragment(List suites) {
                     s.testcases.each { tc ->
                         tr('class': "row-${tc.status}") {
                             td { a(href: "suite-${suiteSlug(s.name)}.html", s.name) }
-                            td(tc.name)
+                            td("${simpleClassName(tc.classname)}.${tc.name}")
                             td { span('class': "badge badge-${tc.status}", tc.status) }
                             td(tc.time)
                             td { pre(tc.failureReason ?: '') }
@@ -524,13 +573,43 @@ def buildAllTestsFragment(List suites) {
     writer.toString()
 }
 
+def suitesFilteredByStatus(List suites, String status) {
+    // Keeps every suite (even ones with zero matches) so buildAllTestsFragment's normal
+    // iteration just emits no rows for them - simpler than special-casing an empty suite list,
+    // and matches how the unfiltered all-tests.html already handles a suite with a parseError
+    // (skipped, not removed from the list).
+    suites.collect { s -> s.parseError ? s : s + [testcases: s.testcases.findAll { it.status == status }] }
+}
+
+def renderFramedStatusPage(String status, String title, List suites) {
+    // Pre-filtered, static equivalent of all-tests.html's JS checkbox filter - unlike that page,
+    // this has a stable URL and needs no JavaScript, matching the old Ant report's
+    // alltests-fails.html/alltests-errors.html/alltests-skipped.html.
+    def detail = buildAllTestsFragment(suitesFilteredByStatus(suites, status))
+    """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report: ${title}</title>
+<link rel="stylesheet" href="junit-report.css">
+</head>
+<body>
+<div class="navbar-report"><h1>${title}</h1></div>
+<div class="container">
+${detail}
+</div>
+</body>
+</html>
+"""
+}
+
 def renderFramedAllTestsPage(List suites) {
     def detail = buildAllTestsFragment(suites)
     """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Apache OFBiz Test Report: All Tests</title>
+<title>Apache OFBiz JUnit (Jupiter) Integration Test Report: All Tests</title>
 <link rel="stylesheet" href="junit-report.css">
 </head>
 <body>
@@ -549,16 +628,30 @@ def buildFramedReportFiles(List suites) {
     def files = [
             // Written once and referenced by every page below via a same-directory relative
             // <link>/<script src> instead of each page inlining its own copy - see modernReportCss()'s
-            // comment. modern-report.html (the single-page report) still inlines both directly, since
+            // comment. test-report.html (the single-page report) still inlines both directly, since
             // staying one portable file is the point there.
             'junit-report.css': modernReportCss(),
             'junit-report.js': modernReportJs(),
             'index.html': renderFramedIndexPage(),
             'nav.html': renderFramedNavPage(suites),
             'overview.html': renderFramedOverviewPage(suites),
-            'all-tests.html': renderFramedAllTestsPage(suites)
+            'all-tests.html': renderFramedAllTestsPage(suites),
+            'all-tests-fails.html': renderFramedStatusPage('fail', 'All Failures', suites),
+            'all-tests-errors.html': renderFramedStatusPage('error', 'All Errors', suites),
+            'all-tests-skipped.html': renderFramedStatusPage('skipped', 'All Skipped', suites)
     ]
-    suites.each { s -> files["suite-${suiteSlug(s.name)}.html"] = renderFramedSuitePage(s) }
+    suites.each { s ->
+        def slug = suiteSlug(s.name)
+        def hasFails = !s.parseError && s.testcases.any { it.status == 'fail' }
+        def hasErrors = !s.parseError && s.testcases.any { it.status == 'error' }
+        files["suite-${slug}.html"] = renderFramedSuitePage(s, hasFails, hasErrors)
+        if (hasFails) {
+            files["suite-${slug}-fails.html"] = renderFramedSuiteStatusPage(s, 'fail', 'Failures')
+        }
+        if (hasErrors) {
+            files["suite-${slug}-errors.html"] = renderFramedSuiteStatusPage(s, 'error', 'Errors')
+        }
+    }
     files
 }
 
@@ -608,8 +701,8 @@ def parseSuiteXml(File xmlFile) {
     }
 }
 
-task createModernTestReport(group: sysadminGroup,
-        description: 'Generate a single-page modern HTML test report alongside the classic Ant-based one') {
+task createTestReport(group: sysadminGroup,
+        description: 'Generate a single-page HTML test report') {
     doLast {
         def suiteFiles = fileTree('./runtime/logs/test-results') {
             include '*.xml'
@@ -624,30 +717,197 @@ task createModernTestReport(group: sysadminGroup,
         def suites = suiteFiles.collect { xmlFile -> parseSuiteXml(xmlFile) }
                 .sort { it.name?.toLowerCase() }
 
-        def reportFile = file('./runtime/logs/test-results/modern-report.html')
+        def reportFile = file('./runtime/logs/test-results/test-report.html')
         reportFile.parentFile.mkdirs()
+        // A checkout upgrading from before the rename still has the previous run's
+        // modern-report.html sitting here with nothing to mark it stale - drop it so only the
+        // report this run just generated is left behind (the framed task self-cleans its whole
+        // output directory, and clears the old modern-report-framed/ the same way).
+        delete file('./runtime/logs/test-results/modern-report.html')
         reportFile.text = renderModernReport(suites)
-        println "Modern test report written to ${reportFile}"
+        println "Test report written to ${reportFile}"
+
+        // Nothing else in this run's console/log output ever states the totals in one place - a
+        // reader otherwise has to open the HTML report, or hand-sum every suite's own logged
+        // result, to learn whether the run actually passed. Same counts the report's own overall
+        // summary cards show, via the same computeOverallCounts, so the two can never disagree.
+        def counts = computeOverallCounts(suites)
+        def passed = counts.tests - counts.failures - counts.errors
+        def parseErrorCount = suites.count { it.parseError }
+        def parseErrorNote = parseErrorCount > 0
+                ? " (${parseErrorCount} suite(s) could not be parsed and are not included in these counts - see the report)"
+                : ''
+        println "Tests: ${counts.tests}, Passed: ${passed}, Failed: ${counts.failures}, " +
+                "Errors: ${counts.errors}, Skipped: ${counts.skipped}${parseErrorNote}"
     }
 }
 
 task createFramedTestReport(group: sysadminGroup,
-        description: 'Generate a navigable, frameset-based HTML test report alongside the classic Ant-based and single-page modern reports') {
+        description: 'Generate a navigable, frameset-based HTML test report') {
     doLast {
         def suiteFiles = fileTree('./runtime/logs/test-results') {
             include '*.xml'
             exclude 'TESTS-TestSuites.xml'
         }
-        // See createModernTestReport's matching comment: sort by parsed suite name, not filename.
+        // See createTestReport's matching comment: sort by parsed suite name, not filename.
         def suites = suiteFiles.collect { xmlFile -> parseSuiteXml(xmlFile) }
                 .sort { it.name?.toLowerCase() }
 
-        def outDir = file('./runtime/logs/test-results/modern-report-framed')
+        def outDir = file('./runtime/logs/test-results/html')
         if (outDir.exists()) {
             outDir.deleteDir()
         }
+        // Same stale-output cleanup createTestReport does for modern-report.html: a checkout
+        // upgrading from before the rename still has the pre-rename framed output directory here.
+        delete file('./runtime/logs/test-results/modern-report-framed')
         outDir.mkdirs()
         buildFramedReportFiles(suites).each { name, content -> file("${outDir}/${name}").text = content }
         println "Framed test report written to ${outDir}/index.html"
+    }
+}
+
+def gradleReportReskinCss() {
+    // Layered on top of Gradle's own built-in test report (build/reports/tests/test/), which is
+    // baked into the Gradle distribution itself and has no supported theming hook - this targets
+    // that report's existing, stable class/id names (.infoBox, .tabLinks, td.success, etc.)
+    // rather than replacing the report wholesale, so the native per-class stdout/stderr tab,
+    // breadcrumbs and tab-switching JS all keep working untouched. Deliberately not shared with
+    // modernReportCss() above: that one styles markup this file itself renders, this one only
+    // overrides selectors Gradle renders, and the two happen to converge on the same palette.
+    '''
+:root {
+  --bs-primary: #0d6efd;
+  --bs-success: #198754;
+  --bs-danger: #dc3545;
+  --bs-secondary: #6c757d;
+  --bs-body-bg: #f8f9fa;
+  --bs-border-color: #dee2e6;
+}
+html, body { background: var(--bs-body-bg) !important; }
+body, body a, body a:visited {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  color: #212529 !important;
+}
+#content > h1 {
+  /* Bleeds edge-to-edge by canceling out #content's native 30px/50px padding (left
+     untouched here) with an equal negative margin, then reapplying its own padding so the
+     title text still lines up with the rest of the page's left/right margin. */
+  margin: -30px -50px 1.5rem !important;
+  padding: 0.9rem 50px !important;
+  background: var(--bs-primary);
+  color: #fff !important;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.breadcrumbs, .breadcrumbs a { color: var(--bs-secondary) !important; font-size: 0.85rem; }
+.breadcrumbs { margin: -1rem 0 1.5rem !important; }
+
+.summaryGroup, #successRate.infoBox {
+  border: 1px solid var(--bs-border-color) !important;
+  border-radius: 0.5rem !important;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.infoBox { padding: 1rem !important; }
+.counter, .percent { font-size: 1.6rem !important; font-weight: 700 !important; color: #212529; }
+.infoBox p { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--bs-secondary); margin-top: 0.35rem !important; }
+#failures .counter { color: var(--bs-danger); }
+#tests .counter { color: var(--bs-primary); }
+#ignored .counter { color: var(--bs-secondary); }
+div.success, #successRate.success { background: #fff !important; border-color: var(--bs-success) !important; }
+div.success .percent, #successRate.success .percent { color: var(--bs-success) !important; }
+div.failures, #successRate.failures { background: #fff !important; border-color: var(--bs-danger) !important; }
+div.failures .percent, #successRate.failures .percent { color: var(--bs-danger) !important; }
+
+ul.tabLinks { border-bottom: 1px solid var(--bs-border-color) !important; min-width: 0 !important; }
+ul.tabLinks li {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0.6rem 0.2rem !important;
+  margin-right: 1.5rem !important;
+}
+ul.tabLinks li a { font-size: 0.95rem !important; color: var(--bs-secondary); font-weight: 500; }
+ul.tabLinks li.selected { background: transparent !important; border-bottom: 2px solid var(--bs-primary) !important; }
+ul.tabLinks li.selected a { color: var(--bs-primary) !important; }
+
+div.tab table {
+  width: 100% !important;
+  min-width: 0 !important;
+  background: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  border-collapse: separate !important;
+  border-spacing: 0;
+}
+div.tab th {
+  background: #f1f3f5 !important;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--bs-secondary);
+  padding: 0.6rem 0.9rem !important;
+  white-space: nowrap;
+}
+div.tab td { padding: 0.55rem 0.9rem !important; white-space: normal !important; border-top: 1px solid var(--bs-border-color) !important; }
+div.tab tr:nth-child(even) td { background: rgba(0, 0, 0, 0.015); }
+div.tab tr:hover td { background: rgba(13, 110, 253, 0.06); }
+td.success { color: var(--bs-success) !important; }
+td.failures { color: var(--bs-danger) !important; }
+
+span.code pre {
+  background: #f8f9fa !important;
+  border: 1px solid var(--bs-border-color) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  font-size: 0.82rem !important;
+  color: #333;
+}
+
+#footer, #footer a { color: var(--bs-secondary) !important; }
+#footer { border-top: 1px solid var(--bs-border-color); padding-top: 1rem; }
+'''
+}
+
+task reskinGradleTestReport(group: sysadminGroup,
+        description: "Layer a Bootstrap-style stylesheet onto Gradle's native build/reports/tests/test HTML report") {
+    doLast {
+        def outDir = file('./build/reports/tests/test')
+        if (!outDir.exists()) {
+            return
+        }
+        def cssFile = file("${outDir}/junit-report-reskin.css")
+        cssFile.text = gradleReportReskinCss()
+        def linkTag = { String href -> "<link rel=\"stylesheet\" href=\"${href}\">\n</head>" }
+        def reportTitle = 'Apache OFBiz JUnit (Jupiter) Test Report'
+        fileTree(outDir) { include '**/*.html' }.each { htmlFile ->
+            def content = htmlFile.text
+            def updated = content
+            // Retitle just the top-level overview page so it doesn't read like a bare Gradle
+            // report; per-package/class pages keep Gradle's own "... Summary" headings untouched.
+            // Matched by regex rather than the literal old text ("Test Summary" the first time
+            // Gradle generates it, but whatever reportTitle was last set to on every run after
+            // that) so re-running with a new reportTitle always lands, without needing a full
+            // regenerate of build/reports/tests/test first.
+            if (htmlFile.name == 'index.html'
+                    && outDir.toPath().relativize(htmlFile.toPath()).nameCount == 1) {
+                updated = updated
+                    .replaceFirst(/<title>Test results - [^<]*<\/title>/,
+                                  "<title>Test results - ${reportTitle}</title>")
+                    .replaceFirst(/<h1>[^<]*<\/h1>/, "<h1>${reportTitle}</h1>")
+            }
+            // Idempotency guard: 'test' being UP-TO-DATE still runs this finalizedBy task (it
+            // carries no declared inputs/outputs of its own), which would otherwise re-inject the
+            // <link> into HTML Gradle didn't regenerate and left already-reskinned from last time.
+            if (!updated.contains('junit-report-reskin.css') && updated.contains('</head>')) {
+                def depth = outDir.toPath().relativize(htmlFile.toPath()).nameCount - 1
+                def href = ('../' * depth) + 'junit-report-reskin.css'
+                updated = updated.replace('</head>', linkTag(href))
+            }
+            if (updated != content) {
+                htmlFile.text = updated
+            }
+        }
+        println "Reskinned Gradle test report at ${outDir}/index.html"
     }
 }

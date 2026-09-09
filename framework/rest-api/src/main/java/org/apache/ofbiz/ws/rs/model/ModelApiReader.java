@@ -108,7 +108,10 @@ public final class ModelApiReader {
                 .displayName(UtilXml.checkEmpty(resourceEle.getAttribute("displayName")).intern())
                 .path(UtilXml.checkEmpty(resourceEle.getAttribute("path")).intern())
                 .publish(Boolean.parseBoolean(UtilXml.checkEmpty(resourceEle.getAttribute("publish")).intern()))
-                .auth(Boolean.parseBoolean(UtilXml.checkEmpty(resourceEle.getAttribute("auth")).intern()));
+                .auth(Boolean.parseBoolean(UtilXml.checkEmpty(resourceEle.getAttribute("auth")).intern()))
+                .primaryPermission(UtilXml.checkEmpty(resourceEle.getAttribute("primaryPermission")).intern())
+                .mainAction(UtilXml.checkEmpty(resourceEle.getAttribute("mainAction")).intern())
+                .customHeaders(UtilXml.checkEmpty(resourceEle.getAttribute("customHeaders")).intern());
     }
 
     private static void createOperations(Element resourceEle, ModelResource resource) {
@@ -122,12 +125,42 @@ public final class ModelApiReader {
                         .produces(UtilXml.checkEmpty(operationEle.getAttribute("produces")).intern())
                         .consumes(UtilXml.checkEmpty(operationEle.getAttribute("consumes")).intern())
                         .description(UtilXml.checkEmpty(operationEle.getAttribute("description")).intern())
-                        .auth(Boolean.parseBoolean(UtilXml.checkEmpty(operationEle.getAttribute("auth")).intern()));
+                        .auth(Boolean.parseBoolean(UtilXml.checkEmpty(operationEle.getAttribute("auth")).intern()))
+                        .primaryPermission(UtilXml.checkEmpty(operationEle.getAttribute("primaryPermission"),
+                                resourceEle.getAttribute("primaryPermission")).intern())
+                        .mainAction(UtilXml.checkEmpty(operationEle.getAttribute("mainAction"),
+                                resourceEle.getAttribute("mainAction")).intern())
+                        .addApiResponses(UtilXml.checkEmpty(operationEle.getAttribute("addApiResponses")).intern())
+                        .customHeaders(UtilXml.checkEmpty(operationEle.getAttribute("customHeaders"),
+                                resourceEle.getAttribute("customHeaders")).intern());
+                createQueryParams(operationEle, op);
+                createExamples(operationEle, op);
                 resource.addOperation(op);
             } else {
                 Debug.logWarning("Error during creation of ModelApi, due to missing 'service' Attribute in ApiModelXml for"
                         + "ModelResource [%s]", MODULE, resource.getName());
             }
+        }
+    }
+
+
+    private static void createQueryParams(Element operationEle, ModelOperation operation) {
+        for (Element queryParamEle : UtilXml.childElementList(operationEle, "queryParam")) {
+            ModelQueryParam qp = new ModelQueryParam()
+                    .name(UtilXml.checkEmpty(queryParamEle.getAttribute("name")).intern())
+                    .type(UtilXml.checkEmpty(queryParamEle.getAttribute("type")).intern())
+                    .description(UtilXml.checkEmpty(queryParamEle.getAttribute("description")).intern());
+            operation.addQueryParam(qp);
+        }
+    }
+
+    private static void createExamples(Element operationEle, ModelOperation operation) {
+        for (Element queryParamEle : UtilXml.childElementList(operationEle, "example")) {
+            ModelExample example = new ModelExample()
+                    .type(UtilXml.checkEmpty(queryParamEle.getAttribute("type")).intern())
+                    .code(UtilXml.checkEmpty(queryParamEle.getAttribute("code")).intern())
+                    .exampleText(UtilXml.checkEmpty(queryParamEle.getTextContent()).intern());
+            operation.addExample(example);
         }
     }
 

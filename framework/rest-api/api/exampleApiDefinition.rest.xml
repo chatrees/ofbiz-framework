@@ -28,6 +28,58 @@ under the License.
     <resource name="orders" path="/createRestOrderExample">
         <operation verb="post" consumes="application/json" produces="application/json">
             <service name="createRestOrderExample"/>
+            <example type="response" code="200">
+                <![CDATA[
+                    {
+                      "statusCode": 200,
+                      "statusDescription": "OK",
+                      "data": {
+                        "orderId": "DEMO-001"
+                      }
+                    }
+                ]]>
+            </example>
+        </operation>
+    </resource>
+
+    <!-- TEST-services -->
+    <!-- The exposed endpoints are neccessary for tests defined in RestTestHttpRequest.java to run.-->
+    <!-- If you decide to remove / not publish this rest.xml, those tests need to be commented out. -->
+
+    <resource name="orders" path="/returnSuccess">
+        <operation verb="post" consumes="application/json" produces="application/json">
+            <service name="returnSuccess"/>
+        </operation>
+    </resource>
+
+    <resource name="orders" path="/returnSuccessButOverwriteStatusCode">
+        <operation verb="post" consumes="application/json" produces="application/json">
+            <service name="returnSuccessButOverwriteStatusCode"/>
+        </operation>
+    </resource>
+
+    <resource name="orders" path="/useCustomHeaderAsServiceParameter">
+        <operation verb="post" consumes="application/json" produces="application/json" customHeaders="x-custom-header">
+            <service name="useCustomHeaderAsServiceParameter"/>
+        </operation>
+    </resource>
+
+    <resource name="orders" path="/useLocaleSetInRequestHeader">
+        <operation verb="post" consumes="application/json" produces="application/json">
+            <service name="useLocaleSetInRequestHeader"/>
+        </operation>
+    </resource>
+
+    <resource name="orders" path="/{myInput}/testServiceInputParametersAsPath/">
+        <operation verb="get" consumes="application/json" produces="application/json">
+            <service name="testServiceInputParameters"/>
+        </operation>
+    </resource>
+
+    <resource name="orders" path="/testServiceInputParametersAsQueryParam/">
+        <operation verb="get" consumes="application/json" produces="application/json">
+            <service name="testServiceInputParameters"/>
+            <queryParam name="myInput" type="string" description="example input" />
         </operation>
     </resource>
 

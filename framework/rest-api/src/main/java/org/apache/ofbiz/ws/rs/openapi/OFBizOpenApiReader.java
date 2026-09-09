@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.ofbiz.base.util.Debug;
+import org.apache.ofbiz.base.util.UtilValidate;
 import org.apache.ofbiz.service.DispatchContext;
 import org.apache.ofbiz.service.GenericServiceException;
 import org.apache.ofbiz.service.LocalDispatcher;
@@ -32,10 +33,12 @@ import org.apache.ofbiz.service.ModelParam;
 import org.apache.ofbiz.service.ModelService;
 import org.apache.ofbiz.webapp.WebAppUtil;
 import org.apache.ofbiz.ws.rs.core.OFBizApiConfig;
+import org.apache.ofbiz.ws.rs.core.ResponseStatus;
 import org.apache.ofbiz.ws.rs.listener.ApiContextListener;
 import org.apache.ofbiz.ws.rs.model.ModelApi;
 import org.apache.ofbiz.ws.rs.model.ModelMapping;
 import org.apache.ofbiz.ws.rs.model.ModelOperation;
+import org.apache.ofbiz.ws.rs.model.ModelQueryParam;
 import org.apache.ofbiz.ws.rs.model.ModelResource;
 import org.apache.ofbiz.ws.rs.util.OpenApiUtil;
 import org.apache.ofbiz.ws.rs.util.RestApiUtil;
@@ -65,6 +68,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.ws.rs.HttpMethod;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.StatusType;
 
 public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
     private static final String MODULE = OFBizOpenApiReader.class.getName();
@@ -93,7 +97,6 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
         context = dispatcher.getDispatchContext();
         initializeStdOpenApiComponents();
         addPredefinedSchemas();
-        addExportableServices();
         addApiResources();
         openApi.setPaths(paths);
         openApi.setComponents(components);
@@ -155,24 +158,6 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
                     .deprecated(false)
                     .addSecurityItem(security);
 
-            String verb = op.getVerb().toUpperCase();
-            if (verb.equalsIgnoreCase(HttpMethod.GET)) {
-                QueryParameter serviceInParam = (QueryParameter) new QueryParameter().required(true)
-                        .description("Operation Input Parameters in JSON").name("input");
-
-                Schema<?> refSchema = new Schema<>().$ref("#/components/schemas/api.request." + service.getName());
-                serviceInParam.content(new Content().addMediaType(jakarta.ws.rs.core.MediaType.APPLICATION_JSON,
-                        new MediaType().schema(refSchema)));
-                operation.addParametersItem(serviceInParam);
-            } else if (verb.matches(HttpMethod.POST + "|" + HttpMethod.PUT + "|" + HttpMethod.PATCH)) {
-                RequestBody request = new RequestBody()
-                        .description("Request Body for operation " + op.getDescription())
-                        .content(new Content().addMediaType(jakarta.ws.rs.core.MediaType.APPLICATION_JSON,
-                                new MediaType().schema(new Schema<>().$ref("#/components/schemas/api.request." + service.getName()))));
-                operation.setRequestBody(request);
-                operation.addParametersItem(HEADER_CONTENT_TYPE_JSON);
-            }
-
             List<String> pathParams = RestApiUtil.getPathParameters(uri);
             for (String pathParam : pathParams) {
                 ModelParam mdParam = service.getInModelParamList().stream()
@@ -185,10 +170,46 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
                 pathParameter.setSchema(OpenApiUtil.getAttributeSchema(service, mdParam));
                 operation.addParametersItem(pathParameter);
             }
+            String verb = op.getVerb().toUpperCase();
+            if (verb.equalsIgnoreCase(HttpMethod.GET)) {
+                List<ModelQueryParam> queryParams = op.getQueryParams();
+
+                for (ModelQueryParam queryParam : queryParams) {
+                    if (pathParams.contains(queryParam.getName())) {
+                        Debug.logWarning("Query parameter '%s' for Service '%s' is already defined as path parameter, ignoring.", MODULE,
+                                queryParam.getName(), service.getName());
+                    } else {
+                        ModelParam mdParam = service.getInModelParamList().stream().filter(param -> (
+                                        !param.getInternal() && queryParam.getName().equals(param.getName()))).findFirst().orElse(null);
+                        if (mdParam != null) {
+                            final QueryParameter serviceInParam = (QueryParameter) new QueryParameter()
+                                    .required(!mdParam.isOptional())
+                                    .description(UtilValidate.isNotEmpty(queryParam.getDescription())
+                                            ? queryParam.getDescription() : mdParam.getDescription())
+                                    .name(queryParam.getName())
+                                    .schema(new Schema<>().type(queryParam.getType()));
+                            operation.addParametersItem(serviceInParam);
+                        } else {
+                            Debug.logWarning("Query parameter '%s' for Service '%s' not found in service definition, ignoring.", MODULE,
+                                    queryParam.getName(), service.getName());
+                        }
+                    }
+                }
+            } else if (verb.matches(HttpMethod.POST + "|" + HttpMethod.PUT + "|" + HttpMethod.PATCH)) {
+                RequestBody request = new RequestBody()
+                        .description("Request Body for operation " + op.getDescription())
+                        .content(new Content().addMediaType(jakarta.ws.rs.core.MediaType.APPLICATION_JSON,
+                                new MediaType().schema(new Schema<>().$ref("#/components/schemas/api.request." + service.getName()))));
+                operation.setRequestBody(request);
+                operation.addParametersItem(HEADER_CONTENT_TYPE_JSON);
+            }
+
 
             addServiceOutSchema(service);
-            addServiceInSchema(service);
-            addServiceOperationApiResponses(service, operation);
+            addServiceInSchema(service, op);
+            addServiceOperationApiResponses(service, op, operation);
+            addAdditionalOperationApiResponses(service, op, operation);
+            addCustomHeaders(op, operation);
             setPathItemOperation(pathItemObject, verb.toUpperCase(), operation);
 
             if (!pathExists) {
@@ -219,41 +240,8 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
         }
         return pathBuilder.toString();
     }
-    private void addExportableServices() {
-        Set<String> serviceNames = context.getAllServiceNames();
-        for (String serviceName : serviceNames) {
-            ModelService service = null;
-            try {
-                service = context.getModelService(serviceName);
-            } catch (GenericServiceException e) {
-                e.printStackTrace();
-            }
-            if (service != null && service.isExport()) {
-                SecurityRequirement security = new SecurityRequirement();
-                security.addList("jwtToken");
-                final Operation operation = new Operation().summary(service.getDescription())
-                        .description(service.getDescription()).addTagsItem("Exported Services")
-                        .operationId(service.getName()).deprecated(false).addSecurityItem(security);
-                PathItem pathItemObject = new PathItem();
-                RequestBody request = new RequestBody().description("Request Body for service " + service.getName())
-                        .content(new Content().addMediaType(jakarta.ws.rs.core.MediaType.APPLICATION_JSON,
-                                new MediaType().schema(new Schema<>().$ref("#/components/schemas/" + "api.request." + service.getName()))));
-                operation.setRequestBody(request);
-                operation.addParametersItem(HEADER_CONTENT_TYPE_JSON);
-
-                addServiceOutSchema(service);
-                addServiceInSchema(service);
-                addServiceOperationApiResponses(service, operation);
-                setPathItemOperation(pathItemObject, HttpMethod.POST, operation);
-                paths.addPathItem("/services/" + service.getName(), pathItemObject);
-            }
-        }
-    }
 
     private void initializeStdOpenApiComponents() {
-        Tag serviceResourceTag = new Tag().name("Exported Services")
-                .description("OFBiz services that are exposed via REST interface with export attribute set to true");
-        openApi.addTagsItem(serviceResourceTag);
         components = openApi.getComponents();
         if (components == null) {
             components = new Components();
@@ -302,8 +290,12 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
         schemas.put("api.response." + service.getName() + ".success", OpenApiUtil.getOutSchema(service));
     }
 
+    private void addServiceInSchema(ModelService service, ModelOperation op) {
+        schemas.put("api.request." + service.getName(), OpenApiUtil.getInSchema(service, op));
+    }
+
     private void addServiceInSchema(ModelService service) {
-        schemas.put("api.request." + service.getName(), OpenApiUtil.getInSchema(service));
+        schemas.put("api.request." + service.getName(), OpenApiUtil.getInSchema(service, null));
     }
 
     private void addPredefinedSchemas() {
@@ -312,9 +304,9 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
         });
     }
 
-    private void addServiceOperationApiResponses(ModelService service, Operation operation) {
+    private void addServiceOperationApiResponses(ModelService service, ModelOperation op, Operation operation) {
         ApiResponses apiResponsesObject = new ApiResponses();
-        ApiResponse successResponse = OpenApiUtil.buildSuccessResponse(service);
+        ApiResponse successResponse = OpenApiUtil.buildSuccessResponse(service, op);
         apiResponsesObject.addApiResponse(String.valueOf(Response.Status.OK.getStatusCode()), successResponse);
         OpenApiUtil.getStandardApiResponses().forEach((code, response) -> {
             apiResponsesObject.addApiResponse(code, response);
@@ -322,4 +314,57 @@ public final class OFBizOpenApiReader extends Reader implements OpenApiReader {
         operation.setResponses(apiResponsesObject);
     }
 
+    private void addAdditionalOperationApiResponses(ModelService service, ModelOperation op, Operation operation) {
+        ApiResponses apiResponsesObject = operation.getResponses();
+
+        if (apiResponsesObject == null) {
+            apiResponsesObject = new ApiResponses();
+        }
+
+        final ApiResponses apiResponsesObjectCopy = apiResponsesObject;
+        op.getAddApiResponsesList().forEach((statusCode) -> {
+
+            StatusType statusType = Response.Status.fromStatusCode(Integer.valueOf(statusCode));
+            if (statusType == null) {
+                statusType = ResponseStatus.Custom.fromStatusCode(Integer.valueOf(statusCode));
+            }
+
+            if (statusType != null) {
+                String schemaName = "";
+                ApiResponse customResponse = OpenApiUtil.getCustomApiResponseByStatusCode(statusCode);
+                if (customResponse != null) {
+                    apiResponsesObjectCopy.addApiResponse(statusCode, customResponse);
+                    Schema<?> schema = customResponse.getContent()
+                            .get(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
+                            .getSchema();
+
+                    String ref = schema.get$ref();
+                    schemaName = ref.substring(ref.lastIndexOf('/') + 1);
+                } else {
+                    schemaName = "api.response.service.".concat(service.getName()).concat(".").concat(String.valueOf(statusType.getStatusCode()));
+
+                    ApiResponse response = new ApiResponse()
+                            .description(statusType.getReasonPhrase())
+                            .content(new Content()
+                                    .addMediaType(javax.ws.rs.core.MediaType.APPLICATION_JSON, new MediaType()
+                                            .schema(new Schema<>().$ref("#/components/schemas/" + schemaName))
+                                            .example(op.getExampleObject("response", String.valueOf(statusType.getStatusCode())))));
+                    apiResponsesObjectCopy.addApiResponse(statusCode, response);
+                }
+
+                if (statusType.getStatusCode() > 399) {
+                    schemas.put(schemaName, OpenApiUtil.getGenericErrorSchema(null));
+                } else {
+                    schemas.put(schemaName, OpenApiUtil.getOutSchema(service));
+                }
+
+            }
+        });
+    }
+
+    private void addCustomHeaders(ModelOperation op, Operation operation) {
+        op.getCustomHeadersList().forEach((headerName) -> {
+            operation.addParametersItem(new HeaderParameter().name(headerName).schema(new StringSchema()).required(true));
+        });
+    }
 }

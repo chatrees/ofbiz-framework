@@ -18,11 +18,14 @@
  *******************************************************************************/
 package org.apache.ofbiz.ws.rs.test;
 
+import java.util.Locale;
 import java.util.Map;
 
+import org.apache.ofbiz.base.util.Debug;
+import org.apache.ofbiz.base.util.UtilValidate;
 import org.apache.ofbiz.service.DispatchContext;
-import org.apache.ofbiz.service.ModelService;
 import org.apache.ofbiz.service.ServiceUtil;
+import org.apache.ofbiz.ws.rs.util.RestServiceUtil;
 
 public class RestTestServices {
 
@@ -34,8 +37,70 @@ public class RestTestServices {
      * @return result
      */
     public static Map<String, Object> returnCustomErrorTest(DispatchContext dctx, Map<String, ? extends Object> context) {
-        Map<String, Object> result = ServiceUtil.returnError("Some error");
-        result.put(ModelService.ERROR_CODE, 999);
+        Map<String, Object> result = RestServiceUtil.returnError("Planned test-error, can be ignored", 999);
+        return result;
+    }
+
+    // ============== Status Code Test Services =================== //
+    /**
+     * TestService returning a success
+     *
+     * @param dctx
+     * @param context
+     * @return result
+     */
+    public static Map<String, Object> returnSuccess(DispatchContext dctx, Map<String, ? extends Object> context) {
+        Map<String, Object> result = ServiceUtil.returnSuccess();
+        return result;
+    }
+
+    /**
+     * TestService returning a success but explicitly returns status code 201 instead of default 200
+     *
+     * @param dctx
+     * @param context
+     * @return result
+     */
+    public static Map<String, Object> returnSuccessButOverwriteStatusCode(DispatchContext dctx, Map<String, ? extends Object> context) {
+        return RestServiceUtil.returnSuccess(null, 201);
+    }
+
+    /**
+     * TestService requiring a customHeader 'x-custom-header' to be present
+     *
+     * @param dctx
+     * @param context
+     * @return result
+     */
+    public static Map<String, Object> useCustomHeaderAsServiceParameter(DispatchContext dctx, Map<String, ? extends Object> context) {
+        String customHeader = (String) context.get("x-custom-header");
+        if (UtilValidate.isEmpty(customHeader)) {
+            return ServiceUtil.returnError("Missing custom header 'x-custom-header'");
+        }
+        Map<String, Object> result = ServiceUtil.returnSuccess();
+        result.put("x-custom-header", customHeader);
+        return result;
+    }
+
+    /**
+     * TestService returning the received locale as a String
+     *
+     * @param dctx
+     * @param context
+     * @return
+     */
+    public static Map<String, Object> useLocaleSetInRequestHeader(DispatchContext dctx, Map<String, ? extends Object> context) {
+        Locale locale = (Locale) context.get("locale");
+        Map<String, Object> result = ServiceUtil.returnSuccess();
+        String localeAsString = locale.toString();
+        result.put("localeAsString", localeAsString);
+        return result;
+    }
+
+    public static Map<String, Object> testServiceInputParameters(DispatchContext dctx, Map<String, ? extends Object> context) {
+        Map<String, Object> result = ServiceUtil.returnSuccess();
+        Debug.logInfo("My value" + (String) context.get("myInput"), null);
+        result.put("myInput", (String) context.get("myInput"));
         return result;
     }
 }

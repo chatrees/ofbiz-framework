@@ -39,7 +39,6 @@ import java.util.Map;
 
 import javax.imageio.ImageIO;
 
-import org.apache.commons.imaging.ImageReadException;
 import org.apache.ofbiz.base.location.FlexibleLocation;
 import org.apache.ofbiz.base.util.Debug;
 import org.apache.ofbiz.base.util.UtilDateTime;
@@ -55,6 +54,7 @@ import org.apache.ofbiz.entity.GenericValue;
 import org.apache.ofbiz.entity.util.EntityQuery;
 import org.apache.ofbiz.entity.util.EntityUtil;
 import org.apache.ofbiz.entity.util.EntityUtilProperties;
+import org.apache.ofbiz.security.Security;
 import org.apache.ofbiz.service.DispatchContext;
 import org.apache.ofbiz.service.GenericServiceException;
 import org.apache.ofbiz.service.LocalDispatcher;
@@ -74,21 +74,25 @@ public class ImageManagementServices {
     private static String imagePath;
 
     /**
-     * Ensures a user-supplied image file name is safe to use as a rename target: it must pass
+     * Ensures a user-supplied image file name is safe to use as a rename target: it must resolve,
+     * once normalized, directly inside the given product image directory, and must pass
      * {@link org.apache.ofbiz.security.SecuredUpload#isValidFileName} (no path separators, no
-     * traversal sequences, no denied extensions) and must resolve, once normalized, directly
-     * inside the given product image directory.
+     * traversal sequences, no denied extensions). The containment check runs first and only calls
+     * into {@code isValidFileName} once containment is confirmed, because that helper is not
+     * side-effect free: for a denied extension it deletes the file at the supplied path, and an
+     * absolute or traversal path checked before containment would let that delete escape the
+     * product directory entirely.
      */
-    private static boolean isValidProductImageFileName(String fileName, Path resolvedProductDir, Delegator delegator) {
+    static boolean isValidProductImageFileName(String fileName, Path resolvedProductDir, Delegator delegator) {
         if (UtilValidate.isEmpty(fileName)) {
             return false;
         }
         try {
-            if (!org.apache.ofbiz.security.SecuredUpload.isValidFileName(fileName, delegator)) {
+            Path resolvedFilePath = resolvedProductDir.resolve(fileName).normalize();
+            if (resolvedFilePath.getParent() == null || !resolvedFilePath.getParent().equals(resolvedProductDir)) {
                 return false;
             }
-            Path resolvedFilePath = resolvedProductDir.resolve(fileName).normalize();
-            return resolvedFilePath.getParent() != null && resolvedFilePath.getParent().equals(resolvedProductDir);
+            return org.apache.ofbiz.security.SecuredUpload.isValidFileName(fileName, delegator);
         } catch (IOException | InvalidPathException e) {
             Debug.logError(e, MODULE);
             return false;
@@ -96,7 +100,7 @@ public class ImageManagementServices {
     }
 
     public static Map<String, Object> addMultipleuploadForProduct(DispatchContext dctx,
-            Map<String, ? extends Object> context) throws ImageReadException {
+            Map<String, ? extends Object> context) {
 
         Map<String, Object> result = new HashMap<>();
         LocalDispatcher dispatcher = dctx.getDispatcher();
@@ -110,6 +114,13 @@ public class ImageManagementServices {
         String imageResize = (String) context.get("imageResize");
         Locale locale = (Locale) context.get("locale");
 
+        Security security = dctx.getSecurity();
+        if (!security.hasEntityPermission("IMAGE_MANAGEMENT", "_UPLOAD", userLogin)) {
+            String errMsg = UtilProperties.getMessage(RES_ERROR, "ProductImageManagementPermissionError", locale);
+            Debug.logError(errMsg, MODULE);
+            return ServiceUtil.returnError(errMsg);
+        }
+
         if (UtilValidate.isNotEmpty(uploadFileName)) {
             Debug.logInfo("================== This is about file: " + uploadFileName + " ==================", MODULE);
             String imageServerPath = FlexibleStringExpander.expandString(EntityUtilProperties.getPropertyValue("catalog",
@@ -121,8 +132,13 @@ public class ImageManagementServices {
             Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
             if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
                 Debug.logError("Path traversal attempt detected in image management upload, productId: " + productId, MODULE);
-                return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                         "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale));
+            }
+            if (!isValidProductImageFileName(uploadFileName, resolvedProductDir, delegator)) {
+                Debug.logError("Path traversal attempt detected in image management upload, uploadFileName: " + uploadFileName, MODULE);
+                return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
+                        "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", uploadFileName), locale));
             }
             String rootTargetDirectory = imageServerPath;
             File rootTargetDir = new File(rootTargetDirectory);
@@ -206,11 +222,11 @@ public class ImageManagementServices {
                     new File(tempFile.toString()).deleteOnExit();
                 } catch (FileNotFoundException e) {
                     Debug.logError(e, MODULE);
-                    return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                             "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", file.getAbsolutePath()), locale));
                 } catch (IOException e) {
                     Debug.logError(e, MODULE);
-                    return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                             "ProductImageViewUnableWriteBinaryData", UtilMisc.toMap("fileName", file.getAbsolutePath()), locale));
                 }
             } else { // Scale Image in different sizes
@@ -233,11 +249,11 @@ public class ImageManagementServices {
                     new File(tempFile.toString()).deleteOnExit();
                 } catch (FileNotFoundException e) {
                     Debug.logError(e, MODULE);
-                    return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                             "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", fileOriginal.getAbsolutePath()), locale));
                 } catch (IOException e) {
                     Debug.logError(e, MODULE);
-                    return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                             "ProductImageViewUnableWriteBinaryData", UtilMisc.toMap("fileName", fileOriginal.getAbsolutePath()), locale));
                 }
 
@@ -339,6 +355,14 @@ public class ImageManagementServices {
         String dataResourceName = (String) context.get("dataResourceName");
         Delegator delegator = dctx.getDelegator();
         Locale locale = (Locale) context.get("locale");
+        GenericValue userLogin = (GenericValue) context.get("userLogin");
+
+        Security security = dctx.getSecurity();
+        if (!security.hasPermission("IMAGE_MANAGEMENT_ADMIN", userLogin)) {
+            String errMsg = UtilProperties.getMessage(RES_ERROR, "ProductImageManagementPermissionError", locale);
+            Debug.logError(errMsg, MODULE);
+            return ServiceUtil.returnError(errMsg);
+        }
 
         try {
             if (UtilValidate.isNotEmpty(contentId)) {
@@ -349,7 +373,7 @@ public class ImageManagementServices {
                 Path resolvedFilePath = Paths.get(imageServerPath, productId, dataResourceName).normalize();
                 if (!resolvedFilePath.startsWith(imageServerNormalizedPath)) {
                     Debug.logError("Path traversal attempt detected in image management remove, productId: " + productId, MODULE);
-                    return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                             "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedFilePath.toString()), locale));
                 }
                 File file = new File(imageServerPath + "/" + productId + "/" + dataResourceName);
@@ -415,7 +439,7 @@ public class ImageManagementServices {
         Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
         if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
             Debug.logError("Path traversal attempt detected in image management scale, productId: " + productId, MODULE);
-            String errMsg = UtilProperties.getMessage(RES_ERROR,
+            String errMsg = UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale);
             result.put(ModelService.ERROR_MESSAGE, errMsg);
             return result;
@@ -577,7 +601,7 @@ public class ImageManagementServices {
     }
 
     public static Map<String, Object> createContentThumbnail(DispatchContext dctx, Map<String, ? extends Object> context,
-            GenericValue userLogin, ByteBuffer imageData, String productId, String imageName) throws ImageReadException {
+            GenericValue userLogin, ByteBuffer imageData, String productId, String imageName) {
         Map<String, Object> result = new HashMap<>();
         LocalDispatcher dispatcher = dctx.getDispatcher();
         Delegator delegator = dctx.getDelegator();
@@ -591,7 +615,7 @@ public class ImageManagementServices {
         Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
         if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
             Debug.logError("Path traversal attempt detected in image management thumbnail, productId: " + productId, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale));
         }
 
@@ -652,12 +676,12 @@ public class ImageManagementServices {
             new File(tempFile.toString()).deleteOnExit();
         } catch (FileNotFoundException e) {
             Debug.logError(e, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile",
                     UtilMisc.toMap("fileName", fileOriginalThumb.getAbsolutePath()), locale));
         } catch (IOException e) {
             Debug.logError(e, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteBinaryData",
                     UtilMisc.toMap("fileName", fileOriginalThumb.getAbsolutePath()), locale));
         }
@@ -787,13 +811,24 @@ public class ImageManagementServices {
         String contentId = (String) context.get("contentId");
         String dataResourceName = (String) context.get("dataResourceName");
         String width = (String) context.get("sizeWidth");
+        Security security = dctx.getSecurity();
+        if (!security.hasPermission("IMAGE_MANAGEMENT_ADMIN", userLogin)) {
+            String errMsg = UtilProperties.getMessage(RES_ERROR, "ProductImageManagementPermissionError", locale);
+            Debug.logError(errMsg, MODULE);
+            return ServiceUtil.returnError(errMsg);
+        }
         // Guard against path traversal via productId
         Path imageServerNormalizedPath = Paths.get(imageServerPath).normalize();
         Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
         if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
             Debug.logError("Path traversal attempt detected in create new image thumbnail, productId: " + productId, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale));
+        }
+        if (!isValidProductImageFileName(dataResourceName, resolvedProductDir, delegator)) {
+            Debug.logError("Path traversal attempt detected in create new image thumbnail, dataResourceName: " + dataResourceName, MODULE);
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
+                    "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", dataResourceName), locale));
         }
         String imageType = ".jpg";
         int resizeWidth = Integer.parseInt(width);
@@ -860,6 +895,7 @@ public class ImageManagementServices {
     public static Map<String, Object> resizeImageOfProduct(DispatchContext dctx, Map<String, ? extends Object> context) {
         Delegator delegator = dctx.getDelegator();
         Locale locale = (Locale) context.get("locale");
+        GenericValue userLogin = (GenericValue) context.get("userLogin");
         String imageServerPath = FlexibleStringExpander.expandString(EntityUtilProperties.getPropertyValue("catalog",
                 "image.management.path", delegator), context);
         String productId = (String) context.get("productId");
@@ -867,13 +903,24 @@ public class ImageManagementServices {
         String width = (String) context.get("resizeWidth");
         int resizeWidth = Integer.parseInt(width);
         int resizeHeight = resizeWidth;
+        Security security = dctx.getSecurity();
+        if (!security.hasPermission("IMAGE_MANAGEMENT_ADMIN", userLogin)) {
+            String errMsg = UtilProperties.getMessage(RES_ERROR, "ProductImageManagementPermissionError", locale);
+            Debug.logError(errMsg, MODULE);
+            return ServiceUtil.returnError(errMsg);
+        }
         // Guard against path traversal via productId
         Path imageServerNormalizedPath = Paths.get(imageServerPath).normalize();
         Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
         if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
             Debug.logError("Path traversal attempt detected in resize image, productId: " + productId, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale));
+        }
+        if (!isValidProductImageFileName(dataResourceName, resolvedProductDir, delegator)) {
+            Debug.logError("Path traversal attempt detected in resize image, dataResourceName: " + dataResourceName, MODULE);
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
+                    "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", dataResourceName), locale));
         }
 
         try {
@@ -905,12 +952,18 @@ public class ImageManagementServices {
         String productId = (String) context.get("productId");
         String contentId = (String) context.get("contentId");
         String filenameToUse = (String) context.get("drDataResourceName");
+        Security security = dctx.getSecurity();
+        if (!security.hasPermission("IMAGE_MANAGEMENT_ADMIN", userLogin)) {
+            String errMsg = UtilProperties.getMessage(RES_ERROR, "ProductImageManagementPermissionError", locale);
+            Debug.logError(errMsg, MODULE);
+            return ServiceUtil.returnError(errMsg);
+        }
         // Guard against path traversal via productId
         Path imageServerNormalizedPath = Paths.get(imageServerPath).normalize();
         Path resolvedProductDir = Paths.get(imageServerPath, productId).normalize();
         if (!resolvedProductDir.startsWith(imageServerNormalizedPath)) {
             Debug.logError("Path traversal attempt detected in rename image, productId: " + productId, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", resolvedProductDir.toString()), locale));
         }
         // Guard against path traversal via drDataResourceName: it must resolve to a plain file name
@@ -918,7 +971,7 @@ public class ImageManagementServices {
         // and a supported image extension.
         if (!isValidProductImageFileName(filenameToUse, resolvedProductDir, delegator)) {
             Debug.logError("Path traversal attempt detected in rename image, drDataResourceName: " + filenameToUse, MODULE);
-            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+            return ServiceUtil.returnError(UtilProperties.getMessage(RESOURCE,
                     "ProductImageViewUnableWriteFile", UtilMisc.toMap("fileName", filenameToUse), locale));
         }
         String imageType = filenameToUse.substring(filenameToUse.lastIndexOf('.'));
